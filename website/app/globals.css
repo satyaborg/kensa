@@ -98,9 +98,9 @@ pre {
     left: 0;
     right: 0;
     z-index: 100;
-    background: rgba(9, 9, 9, calc(0.18 + (var(--nav-progress) * 0.68)));
-    backdrop-filter: blur(calc(4px + (var(--nav-progress) * 8px)));
-    -webkit-backdrop-filter: blur(calc(4px + (var(--nav-progress) * 8px)));
+    background: rgba(9, 9, 9, calc(0.32 + (var(--nav-progress) * 0.5)));
+    backdrop-filter: saturate(170%) blur(calc(18px + (var(--nav-progress) * 10px)));
+    -webkit-backdrop-filter: saturate(170%) blur(calc(18px + (var(--nav-progress) * 10px)));
     border-bottom: 1px solid var(--color-border);
     box-shadow: 0 8px 24px rgba(0, 0, 0, calc(var(--nav-progress) * 0.1));
 }
