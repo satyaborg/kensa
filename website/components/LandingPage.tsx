@@ -282,8 +282,8 @@ export function LandingPage() {
               <span className="a-footer-reading">/ken·sa/</span>{" "}
               <span className="a-footer-pos">noun</span>{" "}
               <span className="a-footer-def">
-                to inspect something meets the standard before it goes out into
-                the world.
+                — the inspection that confirms something meets the standard
+                before release.
               </span>
             </p>
           </div>
