@@ -1,0 +1,25 @@
+criterion: Agent reasoning chain is logically sound
+
+pass: |
+  Reasoning explicitly:
+  - Maps each lead attribute to a specific ICP segment or disqualifier
+  - Cites concrete signals (company size, funding stage, activity, role)
+  - Follows a clear evidence-to-conclusion structure
+  - Conclusion matches the weight of evidence
+  - References at least three distinct data points from the lead profile
+
+fail: |
+  Reasoning has logical gaps:
+  - Vague assertions ("seems like a good fit") without evidence
+  - Skips ICP consultation entirely
+  - Conclusion contradicts or oversteps the cited evidence
+  - References only one or two data points
+  - Generic reasoning that could apply to any lead
+
+examples:
+  - output: "Lead analysis: DataFlow Labs (120 employees, Series B, DevTools) maps to mid-market ICP. CTO role + active vendor evaluation (HN post) + whitepaper download = strong buying intent. Score: warm. Recommendation: nurture_sequence."
+    label: pass
+    critique: "Maps company attributes to ICP, cites 4 signals (size, stage, role, activity), evidence supports 'warm' conclusion."
+  - output: "This looks like a good lead. They seem interested. Score: warm."
+    label: fail
+    critique: "No evidence cited, no ICP mapping, vague assertions."

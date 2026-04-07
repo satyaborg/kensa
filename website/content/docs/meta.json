@@ -1,0 +1,19 @@
+{
+  "title": "Docs",
+  "pages": [
+    "index",
+    "quickstart",
+    "concepts",
+    "---",
+    "scenarios",
+    "checks",
+    "judge",
+    "tracing",
+    "---",
+    "skills",
+    "cli",
+    "ci",
+    "---",
+    "examples"
+  ]
+}

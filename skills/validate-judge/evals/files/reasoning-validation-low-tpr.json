@@ -1,0 +1,69 @@
+{
+  "judge": "reasoning-quality",
+  "total_examples": 8,
+  "confusion_matrix": {"tp": 2, "fp": 0, "tn": 4, "fn": 2},
+  "tpr": 0.5,
+  "tnr": 1.0,
+  "accuracy": 0.75,
+  "threshold": 0.9,
+  "tpr_pass": false,
+  "tnr_pass": true,
+  "results": [
+    {
+      "output": "DataFlow (120 emp, Series B, DevTools) → mid-market ICP. CTO + HN vendor eval + whitepaper + Series B = strong intent. Score: warm.",
+      "human": "pass",
+      "judge": "pass",
+      "correct": true,
+      "reasoning": "Four signals cited with ICP mapping. Evidence supports conclusion."
+    },
+    {
+      "output": "CTO at a Series B DevTools company actively evaluating vendors per HN post. Strong buying signal. Score: warm, recommend nurture_sequence.",
+      "human": "pass",
+      "judge": "fail",
+      "correct": false,
+      "reasoning": "Only cites 2 distinct data points (role and funding stage). The HN post is mentioned but not mapped to an ICP attribute. Below the 3-signal minimum."
+    },
+    {
+      "output": "Strong buying signals: vendor evaluation on HN plus whitepaper download. DevTools company aligns with our ICP. Score: warm.",
+      "human": "pass",
+      "judge": "fail",
+      "correct": false,
+      "reasoning": "Only 2 distinct signals referenced (HN activity, whitepaper). Does not mention company size or funding stage. Below 3-signal threshold."
+    },
+    {
+      "output": "Series B DevTools company, 120 employees. CTO downloaded our CI/CD whitepaper. Mid-market ICP match. Score: warm.",
+      "human": "pass",
+      "judge": "pass",
+      "correct": true,
+      "reasoning": "Three signals: funding stage, company size, content engagement. Maps to ICP segment."
+    },
+    {
+      "output": "Seems like a decent lead. Score: warm.",
+      "human": "fail",
+      "judge": "fail",
+      "correct": true,
+      "reasoning": "No evidence cited, no ICP mapping, vague assertion."
+    },
+    {
+      "output": "Good company. Score: hot.",
+      "human": "fail",
+      "judge": "fail",
+      "correct": true,
+      "reasoning": "No reasoning chain at all. Single vague assertion."
+    },
+    {
+      "output": "They're in tech so probably a fit. Score: warm.",
+      "human": "fail",
+      "judge": "fail",
+      "correct": true,
+      "reasoning": "Generic reasoning, no specific lead attributes, no ICP consultation."
+    },
+    {
+      "output": "Lead is in DevTools but no other signals. Could go either way. Score: cold.",
+      "human": "fail",
+      "judge": "fail",
+      "correct": true,
+      "reasoning": "Only one data point cited, acknowledges insufficient evidence but still generic."
+    }
+  ]
+}

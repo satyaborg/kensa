@@ -1,0 +1,76 @@
+---
+title: Introduction
+description: Kensa is the open source harness for evaluating your agents.
+---
+
+Most eval frameworks ask you to write harnesses, define schemas, and wire up tracing before you test a single scenario. Kensa handles all that for you.
+
+It's an opinionated CLI tool and skill that turns a coding agent like Claude Code into an AI engineer. Just ask it to eval your agent codebase.
+
+## Where to start
+
+| If you want to | Go to |
+|---|---|
+| Get running in under a minute | [Quickstart](/docs/quickstart) |
+| Understand the mental model | [Concepts](/docs/concepts) |
+| See the full eval workflow | [Skills](/docs/skills) |
+| Look up a CLI command | [CLI Reference](/docs/cli) |
+
+## Philosophy
+
+Your coding agent **reasons**: it reads your codebase, identifies failure modes from past traces, and writes scenarios. The CLI **computes**: it instruments, executes, judges, and reports. Skills **orchestrate** the workflow between them.
+
+Kensa is both a CLI and a Python package that sets up tracing for your agents via OTel.
+
+## What you get
+
+Say "evaluate my agent" (triggers the `/audit-evals` skill) and kensa meets you where you are:
+
+| You have | kensa does |
+|---|---|
+| Nothing (cold-start) | Reads your agent codebase, generates baseline scenarios |
+| Existing traces | Surfaces failure patterns from previous runs, generates targeted scenarios |
+| Both | Code understanding + real failure data = highest quality scenarios |
+
+## It gets smarter each run
+
+Feed traces from previous runs back in, and kensa generates scenarios targeting real failure modes instead of educated guesses.
+
+```
+Run 1 (cold-start):    code → baseline scenarios → traces (1)
+Run 2 (with traces):   code + traces (1) → better scenarios → traces (2)
+Run 3:                 code + traces (1,2) → even better scenarios
+```
+
+## Data flow
+
+```
+.kensa/scenarios/*.yaml → load scenarios → subprocess execution
+  → OTel spans captured via KENSA_TRACE_DIR → JSONL trace files
+  → deterministic checks → LLM judge (if criteria set)
+  → Result objects → terminal / markdown / JSON / HTML report
+```
+
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's entry point calls `instrument()` which configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK. The runner reads spans post-execution and translates them to kensa's internal format.
+
+Checks are deterministic, cheap, and fast. They gate the expensive LLM judge call. If a check fails, the scenario fails immediately without spending tokens. A scenario passes only when **all checks pass AND the judge passes**.
+
+```
+scenario
+  ├─ checks (deterministic, free)
+  │   ├─ tool_called ✓
+  │   ├─ tool_order ✓
+  │   ├─ max_cost ✓
+  │   └─ max_turns ✗ → FAIL (judge skipped)
+  │
+  └─ judge (LLM call, costs tokens)
+      └─ only runs if all checks pass
+```
+
+## Compatible coding agents
+
+Kensa works with any coding agent that can run shell commands and use skills.
+
+## License
+
+MIT. The only cost is LLM API calls for judge criteria, and that's optional.

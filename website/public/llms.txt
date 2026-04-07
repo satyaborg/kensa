@@ -1,0 +1,148 @@
+# kensa
+
+The open source agent evals harness. Tell your coding agent to "evaluate my agent" and get a working eval suite in minutes. Deterministic checks + LLM judge. No platform needed. MIT licensed.
+
+## Install
+
+- Skills + CLI (recommended): `npx skills add satyaborg/kensa` then `uv add kensa` (or `pip install kensa`). Works with Codex, Cursor, OpenCode, Gemini CLI, and other coding agents.
+- Claude Code plugin: `/plugin marketplace add satyaborg/kensa` then `/plugin install kensa`
+
+Provider extras: `uv add "kensa[anthropic]"`, `uv add "kensa[openai]"`, `uv add "kensa[langchain]"`, `uv add "kensa[all]"`
+
+## Docs
+
+- [GitHub](https://github.com/satyaborg/kensa): Source, README, and examples
+- [Architecture (AGENTS.md)](https://github.com/satyaborg/kensa/blob/main/AGENTS.md): Data flow, module dependency graph, design patterns, conventions
+
+## How it works
+
+Your coding agent reasons: it reads your codebase, identifies failure modes from past traces, and writes scenarios. The CLI computes: it instruments, executes, judges, and reports. Skills orchestrate the workflow between them.
+
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's entry point calls `from kensa import instrument; instrument()` which configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK (Anthropic, OpenAI, LangChain). Deterministic checks run first; if any check fails, the LLM judge is skipped (fail-fast). A scenario passes only when all checks pass AND the judge passes.
+
+It gets smarter each run — feed traces from previous runs back in, and kensa generates scenarios targeting real failure modes instead of educated guesses.
+
+## Compatible coding agents
+
+Works with Claude Code, Cursor, Codex CLI, Gemini CLI, GitHub Copilot, Kiro, OpenCode, and Pi.
+
+## Features
+
+- **Zero to eval**: The coding agent bootstraps your eval suite to solve cold-start. You review, not scaffold.
+- **Checks gate the judge**: Deterministic checks (tool ordering, cost caps, latency, output matching) run before the LLM judge. If a check fails, no tokens spent.
+- **Trace everything**: Auto-instruments Anthropic, OpenAI, and LangChain via OpenTelemetry. Each scenario runs in its own subprocess with isolated tracing and cache-aware cost tracking.
+- **Dataset-driven evals**: Point at a JSONL file. Each row becomes a run with its own trace and verdict. Re-run for variance stats, flaky detection, and anomaly flagging.
+- **Structured judges**: Define judge criteria in YAML with pass/fail definitions and few-shot examples. Reuse specs across scenarios for consistent grading.
+- **No platform**: pip install, BYO API keys, all data stays local. Same CLI on your laptop and in CI.
+
+## Skills
+
+Five skills orchestrate the eval workflow when used with a coding agent:
+
+- `/audit-evals`: Assess readiness, identify testable behaviors, prepare the environment. The default entry point.
+- `/generate-scenarios`: Happy paths, edge cases, tool usage, error handling, cost bounds. One command.
+- `/generate-judges`: Binary pass/fail definitions with few-shot examples, ready to reuse across scenarios.
+- `/validate-judge`: Test judge accuracy against human labels. Iterates until TPR and TNR meet threshold.
+- `/diagnose-errors`: Categorize failures, identify patterns, recommend next action.
+
+## Checks
+
+Deterministic check types — fast, cheap, binary. Run before the LLM judge to save cost:
+
+- `output_contains`: Output includes a string or pattern
+- `output_matches`: Output matches a regex
+- `tool_called`: A specific tool was invoked
+- `tool_not_called`: A specific tool was not invoked
+- `tool_order`: Tools called in expected sequence
+- `max_cost`: Total cost under threshold
+- `max_turns`: LLM call count under limit
+- `max_duration`: Execution time under limit
+- `no_repeat_calls`: No duplicate tool calls with identical arguments
+
+## Judge
+
+Natural-language criteria assessed against the full execution trace. Binary pass/fail with written reasoning.
+
+Judge model resolution order:
+1. `KENSA_JUDGE_MODEL` env var (explicit override)
+2. `ANTHROPIC_API_KEY` present → claude-sonnet-4-6
+3. `OPENAI_API_KEY` present → gpt-5.4-mini
+4. Neither → error with setup instructions
+
+## Scenario format
+
+Scenarios are YAML files in `.kensa/scenarios/`. Example:
+
+```yaml
+id: classify_ticket
+name: Support ticket triage
+description: Classify a support ticket by severity.
+source: user
+
+input: "Our entire team can't log in. SSO has returned 502 since 7am."
+run_command: python agent.py {{input}}
+expected_outcome: Agent returns the correct priority label.
+
+checks:
+  - type: output_matches
+    params: { pattern: "^P[123]$" }
+    description: Output must be exactly P1, P2, or P3.
+  - type: max_cost
+    params: { max_usd: 0.05 }
+    description: Stay under five cents.
+
+criteria: |
+  P1 is for outages or data loss affecting multiple users.
+  The agent must classify based on business impact, not tone.
+```
+
+## CLI
+
+Works standalone without a coding agent. Python 3.10+.
+
+- `kensa eval`: run + judge + report in one shot
+- `kensa eval -s <name>`: eval specific scenario
+- `kensa init`: Set up .kensa/ dir with example agent
+- `kensa run`: Run scenarios and capture traces
+- `kensa judge`: Score the latest run with checks + LLM judge
+- `kensa judge --model <model>`: Override judge model
+- `kensa report`: Rich terminal output
+- `kensa report --format markdown`: CI-friendly markdown
+- `kensa report --format json`: Machine-readable
+- `kensa report --format html`: Standalone HTML file
+- `kensa analyze`: Surface cost, latency, and anomalies across runs
+- `kensa doctor`: Verify your setup is ready to run
+
+## CI
+
+```yaml
+- name: Run evals
+  run: uv run kensa eval --format markdown
+  # Exit codes: 0 = all pass, 1 = any fail
+```
+
+Deterministic checks need no API keys. Add judge keys as secrets for LLM-judged criteria; if omitted, judge criteria are skipped and don't block the pipeline.
+
+## OTel compatibility
+
+Spans are standard OpenTelemetry emitted via OpenInference instrumentors. kensa's built-in exporter writes them as JSONL to `KENSA_TRACE_DIR`. To ship spans to a remote OTel backend, wire up your own TracerProvider with an OTLP exporter before importing kensa, or skip `instrument()` and feed JSONL spans in via `KENSA_TRACE_DIR`. A built-in OTLP passthrough is on the roadmap.
+
+## Architecture
+
+Flat module structure in `src/kensa/`. Key modules: models.py (Pydantic domain objects, dependency root), checks.py (registry pattern), judge.py (protocol-based providers), runner.py (subprocess execution), report.py (formatters registry), exporter.py (OTel JSONL span exporter). No circular dependencies.
+
+## Examples
+
+Five example agents in `examples/`, each targeting a domain where reliability matters:
+
+- `sql-analyst`: Finance/BI — wrong revenue numbers, hallucinated metrics
+- `incident-triage`: SRE — missed P0, false 3am page
+- `code-reviewer`: Security — shipped CVE, false positive fatigue
+- `customer-support`: CX — misrouted ticket, unauthorized refund promise
+- `sdr-qualifier`: Sales — wasted AE time, lost hot lead
+
+## Links
+
+- [GitHub](https://github.com/satyaborg/kensa): Source and documentation
+- [Discord](https://discord.gg/n77EqxUH): Community
+- [X](https://x.com/kensa_sh): Updates

@@ -1,0 +1,19 @@
+{
+  "name": "kensa",
+  "description": "The open source agent evals harness.",
+  "version": "0.1.0",
+  "author": {
+    "name": "satyaborg"
+  },
+  "homepage": "https://kensa.sh",
+  "repository": "https://github.com/satyaborg/kensa",
+  "license": "MIT",
+  "keywords": [
+    "evals",
+    "llm",
+    "agents",
+    "testing",
+    "opentelemetry",
+    "evaluation"
+  ]
+}

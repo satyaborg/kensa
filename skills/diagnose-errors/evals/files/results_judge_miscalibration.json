@@ -1,0 +1,28 @@
+[
+  {
+    "scenario_id": "sdr_warm_lead",
+    "status": "fail",
+    "check_results": [
+      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "warm"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "nurture_sequence"}, "passed": true},
+      {"check": "max_turns", "params": {"max": 5}, "passed": true}
+    ],
+    "judge_result": {
+      "verdict": "fail",
+      "reasoning": "The outreach message does not explicitly mention the company's recent Series B funding round. While it references their observability stack evaluation, the ICP outreach rules require referencing 'something specific about their company' and a funding round is the most specific thing available.",
+      "evidence": "Outreach reads: 'Building an observability stack is one of the harder infrastructure decisions — especially when you're scaling fast. We've helped teams like yours cut evaluation time in half. Worth a 15-min call this week?'"
+    }
+  },
+  {
+    "scenario_id": "sdr_enterprise_hot",
+    "status": "pass",
+    "check_results": [
+      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "hot"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "book_meeting"}, "passed": true},
+      {"check": "max_turns", "params": {"max": 5}, "passed": true}
+    ],
+    "judge_result": {"verdict": "pass", "reasoning": "Agent correctly identified enterprise signals and drafted concise outreach referencing their Series D and platform expansion."}
+  }
+]

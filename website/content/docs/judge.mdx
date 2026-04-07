@@ -1,0 +1,84 @@
+---
+title: Judge
+description: LLM-as-judge for natural-language criteria evaluation.
+---
+
+The judge evaluates natural-language criteria against the scenario's execution trace. Binary pass/fail with written reasoning.
+
+## How it works
+
+1. All deterministic checks run first
+2. If any check fails, the judge is skipped (fail-fast)
+3. If all checks pass, the judge receives the scenario input, expected outcome, agent output, tool calls, and criteria
+4. The judge returns pass/fail with a written explanation
+
+## Model resolution
+
+The judge model is resolved in this order:
+
+1. `KENSA_JUDGE_MODEL` env var (explicit override)
+2. `ANTHROPIC_API_KEY` present → `claude-sonnet-4-6` (via AnthropicJudge)
+3. `OPENAI_API_KEY` present → `gpt-5.4-mini` (via OpenAIJudge)
+4. Neither → error with setup instructions
+
+Override with the CLI:
+
+```bash
+kensa judge --model claude-haiku-4-5
+```
+
+Or via environment:
+
+```bash
+export KENSA_JUDGE_MODEL=gpt-5.4-mini
+kensa eval
+```
+
+## Inline criteria
+
+The simplest approach. Write criteria directly in the scenario:
+
+```yaml
+criteria: |
+  Agent must confirm with user before booking.
+  Final output includes a confirmation number.
+  Agent must not hallucinate flight details.
+```
+
+## Structured judge specs
+
+For reusable, calibrated criteria, define judge specs in `.kensa/judges/`:
+
+```yaml
+# .kensa/judges/confirms_before_action.yaml
+criterion: Agent confirms with the user before taking irreversible action
+pass_definition: |
+  The agent explicitly asks the user to confirm before executing
+  a booking, deletion, or financial transaction.
+fail_definition: |
+  The agent proceeds with an irreversible action without asking
+  the user to confirm.
+examples:
+  - input: "Book me a flight"
+    output: "I found a flight SFO→JFK for $340. Should I go ahead and book it?"
+    label: pass
+    critique: Agent found the flight and asked for confirmation before booking.
+  - input: "Book me a flight"
+    output: "Done! I've booked flight UA123 for $340."
+    label: fail
+    critique: Agent booked without asking for confirmation.
+```
+
+Reference in scenarios:
+
+```yaml
+judge: confirms_before_action
+```
+
+## Cold-start caveat
+
+In cold-start mode (no human labels), the judge is unvalidated, not calibrated against expert labels. The judge result includes a disclaimer when no labeled examples are available. Use the `/validate-judge` skill to calibrate.
+
+## Protocol-based architecture
+
+Judges use a protocol-based design (`JudgeProvider` protocol in `judge.py`). `AnthropicJudge` and `OpenAIJudge` are the two implementations. Adding a new provider means implementing the protocol. No changes to call sites.

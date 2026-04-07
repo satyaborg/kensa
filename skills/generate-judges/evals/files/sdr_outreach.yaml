@@ -1,0 +1,26 @@
+id: sdr_outreach
+name: Outreach quality for warm mid-market lead
+description: Verify the outreach message follows ICP outreach rules for a mid-market warm lead
+source: code
+input: |
+  Company: DataFlow Labs
+  Size: 120 employees
+  Industry: DevTools
+  Role: CTO
+  Context: Series B, building out observability stack, mentioned on HN they're evaluating vendors.
+  Source: Downloaded whitepaper on CI/CD best practices.
+run_command: uv run python examples/sdr-qualifier/agent.py {{input}}
+expected_outcome: Agent scores as warm (mid-market, evaluating tools, Series B), recommends nurture_sequence, drafts outreach that references the HN post and observability stack.
+checks:
+  - type: tool_called
+    params: { name: lookup_icp }
+    description: Must consult ICP before scoring
+  - type: output_contains
+    params: { value: warm }
+    description: Mid-market with some signals should be warm
+  - type: max_turns
+    params: { max: 5 }
+    description: Should complete in under 5 LLM calls
+criteria: |
+  The outreach message should follow the ICP outreach rules: reference something specific,
+  lead with the problem, one CTA, max 3 sentences, never lie.

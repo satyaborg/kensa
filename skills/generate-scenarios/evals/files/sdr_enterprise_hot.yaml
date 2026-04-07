@@ -1,0 +1,33 @@
+id: sdr_enterprise_hot
+name: Enterprise lead scored hot
+description: Verify agent correctly identifies an enterprise lead with strong signals as hot and books a meeting
+source: code
+input: |
+  Company: TechScale Inc
+  Size: 1200 employees
+  Industry: SaaS
+  Role: VP of Engineering
+  Context: Just raised Series D, expanding platform team, evaluating CI/CD solutions.
+  Source: Inbound demo request via website.
+run_command: uv run python examples/sdr-qualifier/agent.py {{input}}
+expected_outcome: Agent checks ICP, scores as hot (enterprise + multiple signals + budget authority implied), recommends book_meeting, drafts concise personalized outreach referencing Series D and platform expansion.
+checks:
+  - type: tool_called
+    params: { name: lookup_icp }
+    description: Must consult ICP before scoring
+  - type: output_contains
+    params: { value: hot }
+    description: Should score enterprise lead with strong signals as hot
+  - type: output_contains
+    params: { value: book_meeting }
+    description: Hot leads should trigger meeting booking
+  - type: max_turns
+    params: { max: 3 }
+    description: Should complete qualification in under 3 LLM calls
+  - type: max_cost
+    params: { max: 0.15 }
+    description: Single qualification should cost under 15 cents
+criteria: |
+  The agent should check the ICP criteria before scoring.
+  The outreach message should reference the Series D raise or platform expansion.
+  The outreach should be 3 sentences or fewer with one clear CTA.

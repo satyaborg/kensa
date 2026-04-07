@@ -1,0 +1,106 @@
+---
+title: Checks
+description: Deterministic check types. Fast, cheap, binary.
+---
+
+Checks run before the LLM judge to save cost. If any check fails, the judge is skipped (fail-fast). A scenario passes only when **all checks pass AND the judge passes**.
+
+## Check types
+
+| Check | What it tests |
+|---|---|
+| `output_contains` | Output includes a string or pattern |
+| `output_matches` | Output matches a regex |
+| `tool_called` | A specific tool was invoked |
+| `tool_not_called` | A specific tool was *not* invoked |
+| `tool_order` | Tools called in expected sequence |
+| `max_cost` | Total cost under threshold |
+| `max_turns` | LLM call count under limit |
+| `max_duration` | Execution time under limit |
+| `no_repeat_calls` | No duplicate tool calls with identical arguments |
+
+## Examples
+
+### Output checks
+
+```yaml
+checks:
+  # String containment (case-insensitive by default)
+  - type: output_contains
+    params: { value: "confirmation number" }
+
+  # Case-sensitive containment
+  - type: output_contains
+    params: { value: "OK", case_sensitive: true }
+
+  # Regex match
+  - type: output_matches
+    params: { pattern: "\\d{6,}" }
+    description: Output contains a 6+ digit number
+```
+
+### Tool checks
+
+```yaml
+checks:
+  # Tool was called
+  - type: tool_called
+    params: { name: search_flights }
+
+  # Tool was NOT called (safety check)
+  - type: tool_not_called
+    params: { name: delete_account }
+    description: Agent must never call delete
+
+  # Tools called in order
+  - type: tool_order
+    params: { order: [search_flights, book_flight] }
+    description: Must search before booking
+
+  # No duplicate calls (trace-wide; flags any tool called twice with the same args)
+  - type: no_repeat_calls
+    description: Agent should not redo identical work
+```
+
+### Resource checks
+
+```yaml
+checks:
+  # Cost cap
+  - type: max_cost
+    params: { max_usd: 0.10 }
+    description: Under 10 cents
+
+  # Turn limit
+  - type: max_turns
+    params: { max: 5 }
+    description: Complete in 5 LLM calls
+
+  # Time limit
+  - type: max_duration
+    params: { max_seconds: 30 }
+    description: Under 30 seconds
+```
+
+## Adding a check
+
+Checks use a registry pattern. To add a new check type:
+
+1. Add a value to `CheckType` in `models.py`
+2. Write a check function in `checks.py`
+3. Register it in `CHECK_REGISTRY`
+
+```python
+# checks.py
+def check_my_check(spans: list[Span], params: dict[str, Any]) -> CheckResult:
+    # Your logic here
+    return CheckResult(check="my_check", passed=True, detail="...")
+
+
+CHECK_REGISTRY: dict[CheckType, CheckFn] = {
+    # ...existing checks...
+    CheckType.MY_CHECK: check_my_check,
+}
+```
+
+No call-site changes needed. The registry handles dispatch.

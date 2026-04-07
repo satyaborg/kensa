@@ -1,0 +1,49 @@
+[
+  {
+    "scenario_id": "sdr_enterprise_hot",
+    "status": "error",
+    "check_results": [],
+    "judge_result": null,
+    "error": "anthropic.AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}}",
+    "exit_code": 1,
+    "stderr": "Traceback (most recent call last):\n  File \"examples/sdr-qualifier/agent.py\", line 163, in <module>\n    print(run(sys.argv[1]))\n  File \"examples/sdr-qualifier/agent.py\", line 133, in run\n    response = client.messages.create(\nanthropicAuthenticationError: Error code: 401"
+  },
+  {
+    "scenario_id": "sdr_gov_disqualify",
+    "status": "pass",
+    "check_results": [
+      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "disqualified"}, "passed": true},
+      {"check": "max_turns", "params": {"max": 5}, "passed": true}
+    ],
+    "judge_result": {"verdict": "pass", "reasoning": "Correctly disqualified government entity and suggested alternative resources."}
+  },
+  {
+    "scenario_id": "sdr_warm_nurture",
+    "status": "error",
+    "check_results": [],
+    "judge_result": null,
+    "error": "anthropic.AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}}",
+    "exit_code": 1,
+    "stderr": "Traceback (most recent call last):\n  File \"examples/sdr-qualifier/agent.py\", line 163, in <module>\n    print(run(sys.argv[1]))\nanthropicAuthenticationError: Error code: 401"
+  },
+  {
+    "scenario_id": "sdr_cold_partial",
+    "status": "pass",
+    "check_results": [
+      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "output_contains", "params": {"value": "cold"}, "passed": true},
+      {"check": "max_turns", "params": {"max": 5}, "passed": true}
+    ],
+    "judge_result": {"verdict": "pass", "reasoning": "Correctly identified partial match."}
+  },
+  {
+    "scenario_id": "sdr_no_icp_check",
+    "status": "error",
+    "check_results": [],
+    "judge_result": null,
+    "error": "anthropic.AuthenticationError: Error code: 401 - {'type': 'error', 'error': {'type': 'authentication_error', 'message': 'invalid x-api-key'}}",
+    "exit_code": 1,
+    "stderr": "Traceback (most recent call last):\n  File \"examples/sdr-qualifier/agent.py\", line 163, in <module>\n    print(run(sys.argv[1]))\nanthropicAuthenticationError: Error code: 401"
+  }
+]

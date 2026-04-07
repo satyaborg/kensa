@@ -1,0 +1,58 @@
+---
+title: CI Integration
+description: Run kensa in continuous integration pipelines.
+---
+
+## GitHub Actions
+
+```yaml
+# .github/workflows/eval.yml
+name: Evals
+on: [push]
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Install
+        run: uv sync --extra anthropic
+      - name: Run evals
+        run: uv run kensa eval --format markdown
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+Exit codes: `0` = all pass, `1` = any fail.
+
+## What needs API keys
+
+**Deterministic checks** need no API keys. They run entirely locally.
+
+**Judge criteria** need an API key for the LLM provider. Add keys as secrets. If omitted, judge criteria are skipped and don't block the pipeline.
+
+This means you can run cost, latency, tool ordering, and output matching checks in CI for free, and optionally add LLM judging when keys are available.
+
+## Output formats
+
+| Format | Flag | Use case |
+|---|---|---|
+| Terminal | (default) | Local development |
+| Markdown | `--format markdown` | PR comments, CI logs |
+| JSON | `--format json` | Machine-readable, dashboards |
+| HTML | `--format html` | Standalone shareable report |
+
+## PR comment integration
+
+Pipe markdown output to a PR comment:
+
+```yaml
+- name: Run evals
+  run: uv run kensa eval --format markdown > eval-report.md
+
+- name: Comment on PR
+  uses: marocchino/sticky-pull-request-comment@v2
+  with:
+    path: eval-report.md
+```

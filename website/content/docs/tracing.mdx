@@ -1,0 +1,55 @@
+---
+title: Tracing & Instrumentation
+description: OpenTelemetry-based tracing with auto-instrumentation for major LLM providers.
+---
+
+## Auto-instrumentation
+
+kensa auto-instruments LLM SDKs via [OpenInference](https://github.com/Arize-ai/openinference). Install the extra for your provider:
+
+```bash
+uv add "kensa[anthropic]"    # Anthropic
+uv add "kensa[openai]"       # OpenAI
+uv add "kensa[langchain]"    # LangChain
+uv add "kensa[all]"          # Everything
+```
+
+Add two lines to your agent's entry point:
+
+```python
+from kensa import instrument
+instrument()
+
+# Your SDK imports below
+```
+
+`instrument()` must be called **before** SDK imports. It no-ops when `KENSA_TRACE_DIR` is unset.
+
+## How traces work
+
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set to a unique directory. The exporter writes spans as JSONL files. After execution, the runner reads spans and translates them to kensa's internal format.
+
+Traces capture:
+- LLM calls (model, tokens, cost, latency)
+- Tool invocations (name, arguments, results)
+- Span hierarchy (parent/child relationships)
+
+## Passive trace collection
+
+Collect traces outside of kensa's eval loop:
+
+```bash
+KENSA_TRACE_DIR=traces/ python my_agent.py
+```
+
+Feed them back later for trace-informed scenario generation.
+
+## OTel compatibility
+
+Spans are standard [OpenTelemetry](https://opentelemetry.io/) emitted via [OpenInference](https://github.com/Arize-ai/openinference) instrumentors — anything that reads OTel spans can read them. kensa's built-in exporter writes them as JSONL to `KENSA_TRACE_DIR`, which is what `kensa run` and `kensa analyze` consume.
+
+To ship spans to a remote OTel backend, wire up your own `TracerProvider` with an OTLP exporter **before** importing kensa, or skip `instrument()` entirely and feed JSONL spans into kensa via `KENSA_TRACE_DIR`. A built-in OTLP passthrough is on the roadmap.
+
+## Cache-aware cost tracking
+
+kensa reads `cache_read` token counts from spans and subtracts them from prompt token costs. Each scenario's cost reflects actual token usage, not cached replay. Cached tokens are tracked separately in the `TokenCounts` model and visible in reports.

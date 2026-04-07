@@ -1,0 +1,150 @@
+---
+title: CLI Reference
+description: All kensa commands and their options.
+---
+
+kensa works standalone without a coding agent. Python 3.10+.
+
+## kensa init
+
+Scaffold `.kensa/` with an example scenario and agent.
+
+```bash
+kensa init           # create .kensa/ with example files
+kensa init --force   # overwrite the existing example
+kensa init --blank   # scaffold directories only, skip the example
+```
+
+Detects your API keys and scaffolds accordingly:
+- `ANTHROPIC_API_KEY` set → Anthropic agent using `claude-haiku-4-5`
+- `OPENAI_API_KEY` set → OpenAI agent using `gpt-5.4-mini`
+- Neither → stub agent (no API call)
+
+Creates `.kensa/agents/example.py` and `.kensa/scenarios/example.yaml`. Run `kensa eval` immediately after to verify your setup. Use `--blank` if you want an empty `.kensa/` and plan to write scenarios yourself or via a coding agent.
+
+## kensa eval
+
+Run + judge + report in one shot.
+
+```bash
+kensa eval                       # all scenarios
+kensa eval -s classify_ticket      # specific scenario (repeatable)
+kensa eval --format markdown     # CI-friendly output
+kensa eval --timeout 600         # 10-minute per-scenario timeout
+kensa eval --model claude-sonnet-4-6  # override judge model
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--scenario-dir` | `.kensa/scenarios` | Where scenario YAMLs live |
+| `-s, --scenario-id` | all | Run a specific scenario (repeatable) |
+| `--timeout` | `300` | Per-scenario timeout in seconds |
+| `--model` | resolved | Judge model override |
+| `--format` | `terminal` | `terminal`, `markdown`, or `json` |
+
+## kensa run
+
+Run scenarios and capture traces. No judging.
+
+```bash
+kensa run                              # all scenarios
+kensa run -s classify_ticket             # specific scenario
+kensa run --dry-run                    # list what would run, don't execute
+kensa run --format json                # machine-readable manifest
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--scenario-dir` | `.kensa/scenarios` | Where scenario YAMLs live |
+| `-s, --scenario-id` | all | Run a specific scenario (repeatable) |
+| `--timeout` | `300` | Per-scenario timeout in seconds |
+| `--dry-run` | off | List scenarios that would run, without executing |
+| `--format` | `text` | `text` or `json` |
+
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. Traces are written as JSONL to `.kensa/traces/`.
+
+## kensa judge
+
+Score the latest run with checks + LLM judge.
+
+```bash
+kensa judge                            # default model, latest run
+kensa judge --model claude-haiku-4-5   # override model
+kensa judge --run-id abc123            # specific run
+kensa judge --format json              # machine-readable
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run-id` | latest | Which run to judge |
+| `--model` | resolved | Judge model override |
+| `--format` | `text` | `text` or `json` |
+
+Checks run first. If all pass, the LLM judge evaluates criteria. If any check fails, the judge is skipped (fail-fast).
+
+## kensa report
+
+Generate reports from the latest run.
+
+```bash
+kensa report                          # rich terminal output
+kensa report --format markdown        # CI-friendly
+kensa report --format json            # machine-readable
+kensa report --format html            # standalone HTML file
+kensa report -o results.md --format markdown  # write to file
+kensa report --run-id abc123 -v       # full reasoning for a past run
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run-id` | latest | Which run to render |
+| `--format` | `terminal` | `terminal`, `markdown`, `json`, or `html` |
+| `-o, --output` | stdout | Write to file instead of stdout |
+| `-v, --verbose` | off | Show full check details and judge reasoning |
+
+`kensa report` always writes a standalone HTML report to `.kensa/reports/` as a side effect, regardless of `--format`.
+
+## kensa analyze
+
+Surface cost, latency, and anomalies across runs.
+
+```bash
+kensa analyze                         # text summary
+kensa analyze --format json           # machine-readable
+kensa analyze -o analysis.json --format json
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--trace-dir` | `.kensa/traces` | Where trace JSONL files live |
+| `--format` | `text` | `text` or `json` |
+| `-o, --output` | stdout | Write to file instead of stdout |
+
+Outputs per-scenario stats — cost percentiles, latency percentiles, token usage, tool frequencies — and flags anomalies (cost outliers, latency outliers, repeated tool calls, high turn counts).
+
+## kensa doctor
+
+Verify your setup is ready to run.
+
+```bash
+kensa doctor
+```
+
+Checks:
+- Python version (3.10+)
+- Package manager detection (uv, pipenv, pip)
+- `.kensa/scenarios/` directory exists
+- `.env` file loaded
+- API keys (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`)
+- Trace directory writable
+- SDK instrumentation (scans agent scripts for openai/anthropic/langchain imports, verifies instrumentor packages)
+- Judge provider instantiation
+
+## Environment variables
+
+| Variable | Purpose |
+|---|---|
+| `KENSA_TRACE_DIR` | Directory for JSONL span output. Set automatically during `kensa run`. |
+| `KENSA_JUDGE_MODEL` | Override the default judge model. |
+| `ANTHROPIC_API_KEY` | Anthropic API key for judge and/or agent. |
+| `OPENAI_API_KEY` | OpenAI API key for judge and/or agent. |
