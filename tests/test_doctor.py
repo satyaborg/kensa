@@ -173,7 +173,7 @@ class TestDetectSdks:
         agent = tmp_path / "agent.py"
         agent.write_text("from openai import OpenAI\nclient = OpenAI()\n")
         (scenarios / "test.yaml").write_text(
-            "id: test\nname: test\nrun_command: python agent.py {{input}}\n"
+            "id: test\nname: test\nrun_command: [python, agent.py]\n"
         )
         assert "openai" in _detect_sdks()
 
@@ -200,7 +200,7 @@ class TestDetectSdks:
         agent = tmp_path / "agent.py"
         agent.write_text("from langchain.chat_models import ChatOpenAI\n")
         (scenarios / "test.yaml").write_text(
-            "id: test\nname: test\nrun_command: uv run python agent.py {{input}}\n"
+            "id: test\nname: test\nrun_command: [uv, run, python, agent.py]\n"
         )
         assert "langchain" in _detect_sdks()
 

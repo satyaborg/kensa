@@ -95,7 +95,7 @@ After writing scenarios, verify they execute correctly:
 kensa eval -s <scenario_id>
 ```
 
-If a scenario errors (exit code -1), fix the `run_command` or `env_overrides` before proceeding. Common issues: wrong entry point path, missing env var, unquoted `{{input}}`.
+If a scenario errors (exit code -1), fix the `run_command` or `env_overrides` before proceeding. Common issues: wrong entry point path, missing env var, `run_command` written as a string instead of a list.
 
 Once scenarios run cleanly, the user is ready for the full eval loop: `kensa eval`.
 
@@ -110,7 +110,7 @@ When editing scenarios (not creating from scratch):
 
 ## Anti-patterns
 
-- Quoting `{{input}}` in `run_command`. The runner handles quoting via `shlex.quote()`.
+- Writing `run_command` as a string (e.g. `python agent.py {{input}}`). It must be a list of argv elements (e.g. `[python, agent.py]`); the scenario `input` is appended automatically.
 - Vague criteria like "the agent should work correctly." Be specific about what to check.
 - Exact output matching with `output_matches`. LLM output is non-deterministic. Use `output_contains` with key phrases.
 - Missing cost/latency bounds. Every scenario should have at least `max_cost` or `max_turns`.

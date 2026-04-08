@@ -24,28 +24,35 @@ from kensa.runner import (
 
 class TestBuildCommand:
     def test_string_input(self) -> None:
-        result = _build_command("echo {{input}}", "hello world")
+        result = _build_command(["echo"], "hello world")
         assert result == ["echo", "hello world"]
 
     def test_dict_input(self) -> None:
-        result = _build_command("cmd {{input}}", {"key": "value"})
+        result = _build_command(["cmd"], {"key": "value"})
         assert result[0] == "cmd"
         assert '"key"' in result[1]
 
-    def test_no_placeholder(self) -> None:
-        result = _build_command("echo hello", "ignored")
+    def test_empty_input_appended_as_empty_arg(self) -> None:
+        result = _build_command(["echo", "hello"], "")
+        assert result == ["echo", "hello", ""]
+
+    def test_none_input_not_appended(self) -> None:
+        result = _build_command(["echo", "hello"], None)
         assert result == ["echo", "hello"]
 
     def test_shell_metacharacters_not_executed(self) -> None:
-        result = _build_command("echo {{input}}", "hello; rm -rf /")
-        # shlex.quote wraps in single quotes, keeping it as one token
+        # The argv list is passed directly to subprocess (shell=False), so any
+        # metacharacters in the input remain a single literal argv element.
+        result = _build_command(["echo"], "hello; rm -rf /")
         assert result == ["echo", "hello; rm -rf /"]
 
-    def test_double_quoted_placeholder_breaks_input(self) -> None:
-        # run_command must NOT wrap {{input}} in quotes — _build_command handles quoting
-        result = _build_command('echo "{{input}}"', "hello world")
-        # With extra quotes, shlex.split misparses: the input becomes multiple tokens
-        assert result != ["echo", "hello world"]
+    def test_empty_command_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty list"):
+            _build_command([], "anything")
+
+    def test_preserves_existing_args(self) -> None:
+        result = _build_command(["python", "-c", "print('hi')"], "extra")
+        assert result == ["python", "-c", "print('hi')", "extra"]
 
 
 class TestTraceFilename:
@@ -189,6 +196,68 @@ class TestWriteTrace:
 
 
 class TestRunScenario:
+    def test_run_scenario_omitted_input_does_not_add_argv(self, tmp_path: Path) -> None:
+        """Scenario without input should not receive an extra blank argv element."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "sys.path.insert(0, 'src')",
+                    "from kensa import instrument",
+                    "instrument()",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('test-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', str(len(sys.argv)))",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="no_input",
+            name="No input test",
+            run_command=["python3", str(agent)],
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        assert run.input is None
+        assert read_trace(run.trace_path)[0].output == {"value": "1"}
+
+    def test_run_scenario_preserves_empty_input(self, tmp_path: Path) -> None:
+        """Scenario with explicit empty input should receive an empty argv element."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "sys.path.insert(0, 'src')",
+                    "from kensa import instrument",
+                    "instrument()",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('test-agent')",
+                    "arg = sys.argv[1] if len(sys.argv) > 1 else '<missing>'",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', repr(arg))",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="blank_input",
+            name="Blank input test",
+            run_command=["python3", str(agent)],
+            input="",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        assert run.input == ""
+        assert read_trace(run.trace_path)[0].output == {"value": "''"}
+
     def test_run_scenario_no_traces_raises(self, tmp_path: Path) -> None:
         """Scenario that produces no traces should raise RuntimeError."""
         from kensa.runner import run_scenario
@@ -196,7 +265,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="empty",
             name="Empty test",
-            run_command="echo hello",
+            run_command=["echo", "hello"],
             input="test",
         )
         with pytest.raises(RuntimeError, match="produced no traces"):
@@ -209,7 +278,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="failing",
             name="Failing test",
-            run_command="python3 -c {{input}}",
+            run_command=["python3", "-c"],
             input="import sys; print('boom', file=sys.stderr); sys.exit(1)",
         )
         with pytest.raises(RuntimeError, match="boom"):
@@ -222,8 +291,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="slow",
             name="Slow test",
-            run_command="sleep 60",
-            input="test",
+            run_command=["sleep", "60"],
         )
         with pytest.raises(RuntimeError, match="timed out"):
             run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=1)
@@ -235,8 +303,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="env_test",
             name="Env test",
-            run_command="echo $MY_VAR",
-            input="test",
+            run_command=["env"],
             env_overrides={"MY_VAR": "hello"},
         )
         # Still fails because no traces, but tests the env path
@@ -295,8 +362,7 @@ class TestDatasetRowErrors:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text('{"wrong_field": "hello"}\n')
@@ -310,35 +376,12 @@ class TestDatasetRowErrors:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text('{"question": "hi", "expected": "hello"}\n')
         with pytest.raises(KeyError, match=r"Available.*question.*expected"):
             run_scenarios(scenario_dir=str(scenario_dir))
-
-
-class TestMissingInputPlaceholderWarning:
-    def test_warns_on_dataset_without_input_placeholder(self, tmp_path: Path) -> None:
-        import warnings as w
-
-        from kensa.runner import run_scenarios
-
-        scenario_dir = tmp_path / "scenarios"
-        scenario_dir.mkdir()
-        scenario_file = scenario_dir / "test.yaml"
-        scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo hello\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
-        )
-        dataset = scenario_dir / "data.jsonl"
-        dataset.write_text('{"ticket": "test"}\n')
-        with w.catch_warnings(record=True) as caught:
-            w.simplefilter("always")
-            run_scenarios(scenario_dir=str(scenario_dir))
-        msgs = [str(c.message) for c in caught]
-        assert any("{{input}}" in m for m in msgs)
 
 
 class TestDatasetRowPassedThrough:
@@ -349,8 +392,7 @@ class TestDatasetRowPassedThrough:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text(
@@ -363,6 +405,23 @@ class TestDatasetRowPassedThrough:
         assert runs[0].dataset_row == {"ticket": "SSO down", "expected": "P1"}
         assert runs[1].dataset_row == {"ticket": "Add dark mode", "expected": "P3"}
         assert runs[0].input == "SSO down"
+
+    def test_empty_dataset_value_is_preserved_in_scenario_run(self, tmp_path: Path) -> None:
+        from kensa.runner import run_scenarios
+
+        scenario_dir = tmp_path / "scenarios"
+        scenario_dir.mkdir()
+        scenario_file = scenario_dir / "test.yaml"
+        scenario_file.write_text(
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
+        )
+        dataset = scenario_dir / "data.jsonl"
+        dataset.write_text('{"ticket": "", "expected": "blank"}\n')
+        manifest = run_scenarios(scenario_dir=str(scenario_dir))
+        runs = manifest.scenarios["test"]
+        assert len(runs) == 1
+        assert runs[0].dataset_row == {"ticket": "", "expected": "blank"}
+        assert runs[0].input == ""
 
 
 class TestRunScenarios:

@@ -88,12 +88,16 @@ class TestScenarioSerialization:
             check = Check(type=ct, params={"test": True}, description="test")
             assert check.type == ct
 
+    def test_input_defaults_to_none(self) -> None:
+        scenario = Scenario(id="test", name="test", run_command=["echo", "test"])
+        assert scenario.input is None
+
     def test_input_as_dict(self) -> None:
         scenario = Scenario(
             id="test",
             name="test",
             input={"key": "value"},
-            run_command="echo test",
+            run_command=["echo", "test"],
         )
         assert isinstance(scenario.input, dict)
 
@@ -102,9 +106,18 @@ class TestScenarioSerialization:
             id="test",
             name="test",
             input="hello world",
-            run_command="echo test",
+            run_command=["echo", "test"],
         )
         assert isinstance(scenario.input, str)
+
+    def test_input_as_empty_string_is_preserved(self) -> None:
+        scenario = Scenario(
+            id="test",
+            name="test",
+            input="",
+            run_command=["echo", "test"],
+        )
+        assert scenario.input == ""
 
 
 class TestScenarioDatasetValidation:
@@ -112,7 +125,7 @@ class TestScenarioDatasetValidation:
         s = Scenario(
             id="ds",
             name="Dataset test",
-            run_command="echo {{input}}",
+            run_command=["echo"],
             dataset="inputs.jsonl",
             input_field="query",
         )
@@ -120,7 +133,7 @@ class TestScenarioDatasetValidation:
         assert s.input_field == "query"
 
     def test_neither_set_is_valid(self) -> None:
-        s = Scenario(id="no_ds", name="No dataset", run_command="echo hello")
+        s = Scenario(id="no_ds", name="No dataset", run_command=["echo", "hello"])
         assert s.dataset is None
         assert s.input_field is None
 
@@ -131,7 +144,7 @@ class TestScenarioDatasetValidation:
             Scenario(
                 id="bad",
                 name="Bad",
-                run_command="echo {{input}}",
+                run_command=["echo"],
                 dataset="inputs.jsonl",
             )
 
@@ -142,7 +155,7 @@ class TestScenarioDatasetValidation:
             Scenario(
                 id="bad",
                 name="Bad",
-                run_command="echo {{input}}",
+                run_command=["echo"],
                 input_field="query",
             )
 
@@ -254,17 +267,19 @@ class TestRunManifest:
 
 class TestScenarioJudgeValidation:
     def test_judge_only_is_valid(self) -> None:
-        s = Scenario(id="j", name="Judge test", run_command="echo test", judge="tone-match")
+        s = Scenario(id="j", name="Judge test", run_command=["echo", "test"], judge="tone-match")
         assert s.judge == "tone-match"
         assert s.criteria is None
 
     def test_criteria_only_is_valid(self) -> None:
-        s = Scenario(id="c", name="Criteria test", run_command="echo test", criteria="Be accurate")
+        s = Scenario(
+            id="c", name="Criteria test", run_command=["echo", "test"], criteria="Be accurate"
+        )
         assert s.criteria == "Be accurate"
         assert s.judge is None
 
     def test_neither_is_valid(self) -> None:
-        s = Scenario(id="n", name="No judge", run_command="echo test")
+        s = Scenario(id="n", name="No judge", run_command=["echo", "test"])
         assert s.criteria is None
         assert s.judge is None
 
@@ -273,7 +288,7 @@ class TestScenarioJudgeValidation:
             Scenario(
                 id="bad",
                 name="Bad",
-                run_command="echo test",
+                run_command=["echo", "test"],
                 criteria="Be accurate",
                 judge="tone-match",
             )

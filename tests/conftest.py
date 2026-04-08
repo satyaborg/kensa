@@ -78,7 +78,7 @@ def sample_scenario() -> Scenario:
         description="Basic weather query to verify agent works",
         source=ScenarioSource.CODE,
         input="What is the weather in San Francisco?",
-        run_command="python agent.py {{input}}",
+        run_command=["python", "agent.py"],
         expected_outcome="Agent returns weather information for San Francisco",
         checks=[
             Check(
@@ -108,7 +108,7 @@ def sample_dataset_scenario() -> Scenario:
         name="SQL analyst correctness",
         description="Tests query generation across difficulty levels",
         source=ScenarioSource.CODE,
-        run_command="python agent.py {{input}}",
+        run_command=["python", "agent.py"],
         dataset="sql_queries.jsonl",
         input_field="query",
         expected_outcome="Agent produces valid SQL query",

@@ -64,7 +64,7 @@ class TestExporterRoundTrip:
         scenario = Scenario(
             id="exporter_roundtrip",
             name="Exporter round-trip",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="hello",
         )
         _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
@@ -97,7 +97,7 @@ class TestExporterRoundTrip:
         scenario = Scenario(
             id="tool_roundtrip",
             name="Tool round-trip",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
         )
         _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
@@ -130,7 +130,7 @@ class TestExporterRoundTrip:
         scenario = Scenario(
             id="multi_span",
             name="Multi-span trace",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
         )
         _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
@@ -167,7 +167,7 @@ class TestExporterRoundTrip:
         scenario = Scenario(
             id="output_roundtrip",
             name="Output round-trip",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
         )
         _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
@@ -210,7 +210,7 @@ class TestDeterministicChecks:
         scenario = Scenario(
             id="checks_pass",
             name="Checks pass test",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="What is the weather?",
             checks=[
                 Check(type=CheckType.TOOL_CALLED, params={"name": "get_weather"}),
@@ -251,7 +251,7 @@ class TestDeterministicChecks:
         scenario = Scenario(
             id="checks_fail",
             name="Checks fail test",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
             checks=[
                 Check(type=CheckType.TOOL_CALLED, params={"name": "missing_tool"}),
@@ -291,7 +291,7 @@ class TestDeterministicChecks:
         scenario = Scenario(
             id="max_turns_exceeded",
             name="Max turns exceeded",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
             checks=[Check(type=CheckType.MAX_TURNS, params={"max": 3})],
         )
@@ -341,7 +341,7 @@ class TestEvalPipeline:
         scenario_data = {
             "id": "pipeline_test",
             "name": "Pipeline integration test",
-            "run_command": f"{PYTHON} {agent} {{{{input}}}}",
+            "run_command": [PYTHON, str(agent)],
             "input": "hello",
             "checks": [
                 {"type": "output_contains", "params": {"value": "Hello"}},
@@ -411,7 +411,7 @@ class TestEvalPipeline:
             scenario_data = {
                 "id": f"scenario_{i}",
                 "name": f"Test scenario {i}",
-                "run_command": f"{PYTHON} {agent} {{{{input}}}}",
+                "run_command": [PYTHON, str(agent)],
                 "input": f"input_{i}",
             }
             with open(scenario_dir / f"scenario_{i}.yaml", "w") as f:
@@ -457,7 +457,7 @@ class TestErrorPaths:
         scenario = Scenario(
             id="crash_test",
             name="Crash test",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
         )
         with pytest.raises(RuntimeError, match="fatal error"):
@@ -474,7 +474,7 @@ class TestErrorPaths:
         scenario = Scenario(
             id="no_instrument",
             name="No instrument test",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
         )
         with pytest.raises(RuntimeError, match="produced no traces"):
@@ -518,7 +518,7 @@ class TestErrorPaths:
             scenario_data = {
                 "id": sid,
                 "name": f"{sid} scenario",
-                "run_command": f"{PYTHON} {agent_path} {{{{input}}}}",
+                "run_command": [PYTHON, str(agent_path)],
                 "input": "test",
             }
             with open(scenario_dir / f"{sid}.yaml", "w") as f:
@@ -561,7 +561,7 @@ class TestErrorPaths:
         scenario = Scenario(
             id="env_test",
             name="Env override test",
-            run_command=f"{PYTHON} {agent} {{{{input}}}}",
+            run_command=[PYTHON, str(agent)],
             input="test",
             env_overrides={"MY_CUSTOM_VAR": "integration_value"},
         )
@@ -570,6 +570,64 @@ class TestErrorPaths:
         spans = read_trace(run.trace_path)
         assert spans[0].output is not None
         assert "integration_value" in str(spans[0].output)
+
+    def test_explicit_blank_input_reaches_subprocess(self, tmp_path: Path) -> None:
+        """An explicit empty-string input should be passed as argv[1]."""
+        agent = _write_agent(
+            tmp_path,
+            """\
+            import sys
+            sys.path.insert(0, "src")
+            from kensa import instrument
+            instrument()
+            from opentelemetry import trace
+            tracer = trace.get_tracer("test-agent")
+            arg = sys.argv[1] if len(sys.argv) > 1 else "<missing>"
+            with tracer.start_as_current_span("ChatCompletion") as span:
+                span.set_attribute("openinference.span.kind", "LLM")
+                span.set_attribute("llm.model_name", "test-model")
+                span.set_attribute("output.value", repr(arg))
+            """,
+        )
+        scenario = Scenario(
+            id="blank_input",
+            name="Blank input test",
+            run_command=[PYTHON, str(agent)],
+            input="",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
+
+        spans = read_trace(run.trace_path)
+        assert run.input == ""
+        assert spans[0].output == {"value": "''"}
+
+    def test_omitted_input_does_not_reach_subprocess(self, tmp_path: Path) -> None:
+        """A scenario without input should not receive an extra argv element."""
+        agent = _write_agent(
+            tmp_path,
+            """\
+            import sys
+            sys.path.insert(0, "src")
+            from kensa import instrument
+            instrument()
+            from opentelemetry import trace
+            tracer = trace.get_tracer("test-agent")
+            with tracer.start_as_current_span("ChatCompletion") as span:
+                span.set_attribute("openinference.span.kind", "LLM")
+                span.set_attribute("llm.model_name", "test-model")
+                span.set_attribute("output.value", str(len(sys.argv)))
+            """,
+        )
+        scenario = Scenario(
+            id="no_input",
+            name="No input test",
+            run_command=[PYTHON, str(agent)],
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
+
+        spans = read_trace(run.trace_path)
+        assert run.input is None
+        assert spans[0].output == {"value": "1"}
 
 
 # ---------------------------------------------------------------------------
@@ -618,7 +676,7 @@ class TestCliIntegration:
             scenario_data = {
                 "id": "cli_test",
                 "name": "CLI integration test",
-                "run_command": f"{PYTHON} {agent.resolve()} {{{{input}}}}",
+                "run_command": [PYTHON, str(agent.resolve())],
                 "input": "hello",
                 "checks": [
                     {"type": "output_contains", "params": {"value": "CLI test"}},
@@ -666,7 +724,7 @@ class TestCliIntegration:
             scenario_data = {
                 "id": "run_report",
                 "name": "Run then report",
-                "run_command": f"{PYTHON} {agent.resolve()} {{{{input}}}}",
+                "run_command": [PYTHON, str(agent.resolve())],
                 "input": "test",
             }
             with open(scenario_dir / "run_report.yaml", "w") as f:

@@ -78,7 +78,7 @@ Identify these five things. Use `Agent` with `subagent_type: "Explore"` for thor
 Record as working memory:
 ```
 Entry point: src/agent.py
-Run command: uv run python src/agent.py {{input}}
+Run command: [uv, run, python, src/agent.py]
 SDK: anthropic
 Tools: [get_weather, search_web, calculate]
 Behaviors: Answers user questions using web search and weather data

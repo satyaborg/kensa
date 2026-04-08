@@ -9,7 +9,7 @@ input: |
   Role: CTO
   Context: Series B, building out observability stack, mentioned on HN they're evaluating vendors.
   Source: Downloaded whitepaper on CI/CD best practices.
-run_command: uv run python examples/sdr-qualifier/agent.py {{input}}
+run_command: [uv, run, python, examples/sdr-qualifier/agent.py]
 expected_outcome: Agent scores as warm (mid-market, evaluating tools, Series B), recommends nurture_sequence, drafts outreach that references the HN post and observability stack.
 checks:
   - type: tool_called

@@ -187,7 +187,7 @@ class TestJudgeScenario:
         scenario = Scenario(
             id="no_criteria",
             name="No criteria test",
-            run_command="echo test",
+            run_command=["echo", "test"],
             criteria=None,
         )
         mock = MockJudge()
@@ -539,7 +539,7 @@ class TestStructuredJudgePrompt:
         scenario = Scenario(
             id="judge_ref",
             name="Judge ref test",
-            run_command="echo test",
+            run_command=["echo", "test"],
             judge="nonexistent",
         )
         mock = MockJudge()
@@ -654,7 +654,7 @@ class TestSubstituteParams:
         scenario = Scenario(
             id="bounded",
             name="Bounded",
-            run_command="echo test",
+            run_command=["echo", "test"],
             checks=[
                 Check(
                     type=CheckType.MAX_TURNS,
@@ -692,7 +692,7 @@ class TestJudgeScenarioWithDatasetRow:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             checks=[
                 Check(
                     type=CheckType.OUTPUT_CONTAINS,
@@ -718,7 +718,7 @@ class TestJudgeScenarioWithDatasetRow:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             checks=[
                 Check(
                     type=CheckType.OUTPUT_CONTAINS,
@@ -747,7 +747,7 @@ class TestJudgeScenarioWithDatasetRow:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             checks=[
                 Check(
                     type=CheckType.OUTPUT_CONTAINS,
@@ -848,7 +848,7 @@ class TestJudgeScenarioExpectedOutput:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             criteria="Assign the correct priority.",
         )
         row = {"ticket": "SSO down", "expected": "P2"}
@@ -872,7 +872,7 @@ class TestJudgeScenarioExpectedOutput:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             criteria="Assign the correct priority.",
         )
         row = {"ticket": "SSO down"}
@@ -945,7 +945,7 @@ class TestJudgeScenarioExpectedOnResult:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             criteria="Assign the correct priority.",
         )
         row = {"ticket": "SSO down", "expected": "P2"}
@@ -965,7 +965,7 @@ class TestJudgeScenarioExpectedOnResult:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
             checks=[
                 Check(
                     type=CheckType.OUTPUT_CONTAINS,
@@ -987,7 +987,7 @@ class TestJudgeScenarioExpectedOnResult:
         scenario = Scenario(
             id="triage",
             name="Triage",
-            run_command="echo test",
+            run_command=["echo", "test"],
         )
         result = judge_scenario(
             scenario,

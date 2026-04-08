@@ -14,8 +14,8 @@ name: string                       # human-readable
 description: string                # what this tests and why
 source: code | traces | user       # how it was generated
 
-input: string | object             # what to send the agent
-run_command: string                # command with {{input}} placeholder (NO quotes around {{input}})
+input: string | object             # what to send the agent (appended as the final argv element)
+run_command: [string, ...]         # argv list passed verbatim to subprocess (no shell, no templating)
 env_overrides:                     # optional env var overrides
   KEY: value
 
@@ -59,7 +59,7 @@ name: Basic weather query
 description: Verify agent can answer a simple weather question using the weather tool
 source: code
 input: "What's the weather in Tokyo?"
-run_command: uv run python agent.py {{input}}
+run_command: [uv, run, python, agent.py]
 expected_outcome: Agent calls get_weather tool and returns temperature for Tokyo
 checks:
   - type: tool_called
@@ -82,13 +82,12 @@ criteria: |
 
 ## Anti-patterns
 
-**Quoting `{{input}}`:**
+**String-form `run_command`:**
 ```yaml
-run_command: uv run python agent.py "{{input}}"   # WRONG, double-quotes cause nested quoting
-run_command: uv run python agent.py '{{input}}'   # WRONG, same problem with single quotes
-run_command: uv run python agent.py {{input}}     # CORRECT, the runner handles quoting via shlex.quote()
+run_command: uv run python agent.py {{input}}     # WRONG, legacy template form is no longer supported
+run_command: [uv, run, python, agent.py]          # CORRECT, list of argv elements
 ```
-Why it's bad: the runner already applies `shlex.quote()` to the input value. Adding quotes in the template causes double-quoting that breaks on apostrophes (`I'd`, `they're`), multi-line strings, and special characters.
+Why it's bad: the string form historically required `{{input}}` interpolation and shell-style parsing, which made command injection possible if the template was quoted incorrectly. The list form is passed straight to `subprocess.run` (no shell, no parsing), and the scenario `input` is appended as the final argv element automatically.
 
 **Too vague:**
 ```yaml

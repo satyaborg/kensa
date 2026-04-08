@@ -135,8 +135,8 @@ class Scenario(BaseModel):
     description: str = ""
     source: ScenarioSource = ScenarioSource.CODE
 
-    input: str | dict[str, Any] = ""
-    run_command: str = ""
+    input: str | dict[str, Any] | None = None
+    run_command: list[str] = Field(default_factory=list)
     env_overrides: dict[str, str] = Field(default_factory=dict)
 
     # Dataset expansion: reference a JSONL file for parameterized inputs.

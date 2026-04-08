@@ -27,7 +27,7 @@ A scenario defines a single test case: an input, a command to run, and how to ev
 ```yaml
 id: classify_ticket
 input: "Our entire team can't log in. SSO has returned 502 since 7am."
-run_command: python agent.py {{input}}
+run_command: [python, agent.py]
 checks:
   - type: output_matches
     params: { pattern: "^P[123]$" }
