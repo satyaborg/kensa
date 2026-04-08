@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 import tempfile
 import time
-import warnings
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -132,15 +130,20 @@ def load_scenarios(
     return scenarios
 
 
-def _build_command(command: str, input_value: str | dict[str, Any]) -> list[str]:
-    """Build a safe command arg list by substituting {{input}} then splitting via shlex.
+def _build_command(command: list[str], input_value: str | dict[str, Any]) -> list[str]:
+    """Build the subprocess argv from a list-form ``run_command`` and input.
 
-    The input value is shell-quoted before substitution so it remains a single
-    token regardless of spaces or metacharacters.
+    The input is appended as the final argv element when non-empty. Dict inputs
+    are JSON-serialized. No shell, no parsing, no template substitution: every
+    element of ``command`` is passed verbatim to ``subprocess.run``, so shell
+    metacharacters in the input cannot be interpreted.
     """
+    if not command:
+        raise ValueError("run_command must be a non-empty list of argv elements")
     input_str = json.dumps(input_value) if isinstance(input_value, dict) else str(input_value)
-    substituted = command.replace("{{input}}", shlex.quote(input_str))
-    return shlex.split(substituted)
+    if input_str == "":
+        return list(command)
+    return [*command, input_str]
 
 
 def _read_spans(trace_dir: Path) -> list[Span]:
@@ -304,12 +307,6 @@ def run_scenarios(
 
     for scenario in scenarios:
         if scenario.dataset and scenario.input_field:
-            if "{{input}}" not in scenario.run_command:
-                warnings.warn(
-                    f"Scenario {scenario.id!r} has a dataset but run_command "
-                    f"does not contain {{{{input}}}}. All rows will run identically.",
-                    stacklevel=2,
-                )
             rows = load_dataset(Path(scenario_dir), scenario.dataset)
             runs: list[ScenarioRun] = []
             for i, row in enumerate(rows, 1):

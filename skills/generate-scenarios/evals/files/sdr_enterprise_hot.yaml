@@ -9,7 +9,7 @@ input: |
   Role: VP of Engineering
   Context: Just raised Series D, expanding platform team, evaluating CI/CD solutions.
   Source: Inbound demo request via website.
-run_command: uv run python examples/sdr-qualifier/agent.py {{input}}
+run_command: [uv, run, python, examples/sdr-qualifier/agent.py]
 expected_outcome: Agent checks ICP, scores as hot (enterprise + multiple signals + budget authority implied), recommends book_meeting, drafts concise personalized outreach referencing Series D and platform expansion.
 checks:
   - type: tool_called

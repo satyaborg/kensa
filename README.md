@@ -104,7 +104,7 @@ Scenarios live in `.kensa/scenarios/*.yaml` and point at your agent entrypoint w
 ```yaml
 id: classify_ticket
 input: "Our entire team can't log in. SSO has returned 502 since 7am."
-run_command: python agent.py {{input}}
+run_command: [python, agent.py]   # input is appended as the final argv element
 
 checks:
   - type: output_matches

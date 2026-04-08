@@ -14,7 +14,7 @@ description: Classify a support ticket by severity.
 source: user                            # code | traces | user
 
 input: "Our entire team can't log in. SSO has returned 502 since 7am."
-run_command: python agent.py {{input}}
+run_command: [python, agent.py]
 
 expected_outcome: Agent returns the correct priority label.
 
@@ -40,7 +40,7 @@ criteria: |
 | `description` | No | What this scenario tests |
 | `source` | No | How it was generated: `code`, `traces`, or `user` |
 | `input` | Yes | The prompt or input to the agent |
-| `run_command` | Yes | Shell command to execute. `{{input}}` is interpolated |
+| `run_command` | Yes | Argv list passed to `subprocess.run` (no shell). The scenario `input` is appended as the final element. |
 | `env_overrides` | No | Extra environment variables for this scenario's subprocess |
 | `dataset` | No | Path to a JSONL file for parameterized inputs (requires `input_field`) |
 | `input_field` | No | JSONL field to use as the input (required when `dataset` is set) |
@@ -74,7 +74,7 @@ id: booking_variations
 name: Booking across routes
 dataset: data/routes.jsonl
 input_field: query
-run_command: python agent.py {{input}}
+run_command: [python, agent.py]
 
 checks:
   - type: tool_called

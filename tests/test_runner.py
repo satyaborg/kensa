@@ -24,28 +24,31 @@ from kensa.runner import (
 
 class TestBuildCommand:
     def test_string_input(self) -> None:
-        result = _build_command("echo {{input}}", "hello world")
+        result = _build_command(["echo"], "hello world")
         assert result == ["echo", "hello world"]
 
     def test_dict_input(self) -> None:
-        result = _build_command("cmd {{input}}", {"key": "value"})
+        result = _build_command(["cmd"], {"key": "value"})
         assert result[0] == "cmd"
         assert '"key"' in result[1]
 
-    def test_no_placeholder(self) -> None:
-        result = _build_command("echo hello", "ignored")
+    def test_empty_input_not_appended(self) -> None:
+        result = _build_command(["echo", "hello"], "")
         assert result == ["echo", "hello"]
 
     def test_shell_metacharacters_not_executed(self) -> None:
-        result = _build_command("echo {{input}}", "hello; rm -rf /")
-        # shlex.quote wraps in single quotes, keeping it as one token
+        # The argv list is passed directly to subprocess (shell=False), so any
+        # metacharacters in the input remain a single literal argv element.
+        result = _build_command(["echo"], "hello; rm -rf /")
         assert result == ["echo", "hello; rm -rf /"]
 
-    def test_double_quoted_placeholder_breaks_input(self) -> None:
-        # run_command must NOT wrap {{input}} in quotes — _build_command handles quoting
-        result = _build_command('echo "{{input}}"', "hello world")
-        # With extra quotes, shlex.split misparses: the input becomes multiple tokens
-        assert result != ["echo", "hello world"]
+    def test_empty_command_raises(self) -> None:
+        with pytest.raises(ValueError, match="non-empty list"):
+            _build_command([], "anything")
+
+    def test_preserves_existing_args(self) -> None:
+        result = _build_command(["python", "-c", "print('hi')"], "extra")
+        assert result == ["python", "-c", "print('hi')", "extra"]
 
 
 class TestTraceFilename:
@@ -196,7 +199,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="empty",
             name="Empty test",
-            run_command="echo hello",
+            run_command=["echo", "hello"],
             input="test",
         )
         with pytest.raises(RuntimeError, match="produced no traces"):
@@ -209,7 +212,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="failing",
             name="Failing test",
-            run_command="python3 -c {{input}}",
+            run_command=["python3", "-c"],
             input="import sys; print('boom', file=sys.stderr); sys.exit(1)",
         )
         with pytest.raises(RuntimeError, match="boom"):
@@ -222,8 +225,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="slow",
             name="Slow test",
-            run_command="sleep 60",
-            input="test",
+            run_command=["sleep", "60"],
         )
         with pytest.raises(RuntimeError, match="timed out"):
             run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=1)
@@ -235,8 +237,7 @@ class TestRunScenario:
         scenario = Scenario(
             id="env_test",
             name="Env test",
-            run_command="echo $MY_VAR",
-            input="test",
+            run_command=["env"],
             env_overrides={"MY_VAR": "hello"},
         )
         # Still fails because no traces, but tests the env path
@@ -295,8 +296,7 @@ class TestDatasetRowErrors:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text('{"wrong_field": "hello"}\n')
@@ -310,35 +310,12 @@ class TestDatasetRowErrors:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text('{"question": "hi", "expected": "hello"}\n')
         with pytest.raises(KeyError, match=r"Available.*question.*expected"):
             run_scenarios(scenario_dir=str(scenario_dir))
-
-
-class TestMissingInputPlaceholderWarning:
-    def test_warns_on_dataset_without_input_placeholder(self, tmp_path: Path) -> None:
-        import warnings as w
-
-        from kensa.runner import run_scenarios
-
-        scenario_dir = tmp_path / "scenarios"
-        scenario_dir.mkdir()
-        scenario_file = scenario_dir / "test.yaml"
-        scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo hello\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
-        )
-        dataset = scenario_dir / "data.jsonl"
-        dataset.write_text('{"ticket": "test"}\n')
-        with w.catch_warnings(record=True) as caught:
-            w.simplefilter("always")
-            run_scenarios(scenario_dir=str(scenario_dir))
-        msgs = [str(c.message) for c in caught]
-        assert any("{{input}}" in m for m in msgs)
 
 
 class TestDatasetRowPassedThrough:
@@ -349,8 +326,7 @@ class TestDatasetRowPassedThrough:
         scenario_dir.mkdir()
         scenario_file = scenario_dir / "test.yaml"
         scenario_file.write_text(
-            "id: test\nname: test\nrun_command: echo {{input}}\n"
-            "dataset: data.jsonl\ninput_field: ticket\n"
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
         )
         dataset = scenario_dir / "data.jsonl"
         dataset.write_text(

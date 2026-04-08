@@ -80,7 +80,7 @@ description: Classify a support ticket by severity.
 source: user
 
 input: "Our entire team can't log in. SSO has returned 502 since 7am."
-run_command: python agent.py {{input}}
+run_command: [python, agent.py]
 expected_outcome: Agent returns the correct priority label.
 
 checks:

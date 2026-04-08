@@ -57,7 +57,7 @@ class TestCliRun:
             scenario = {
                 "id": "bad_cmd",
                 "name": "Bad command test",
-                "run_command": "false",
+                "run_command": ["false"],
                 "input": "test",
             }
             with open(scenario_dir / "bad_cmd.yaml", "w") as f:
@@ -136,7 +136,7 @@ class TestCliRun:
         runner = CliRunner()
         scenario_dir = tmp_path / "scenarios"
         scenario_dir.mkdir()
-        scenario = {"id": "demo", "name": "Demo", "run_command": "echo hi", "input": "x"}
+        scenario = {"id": "demo", "name": "Demo", "run_command": ["echo", "hi"], "input": "x"}
         with open(scenario_dir / "demo.yaml", "w") as f:
             yaml.dump(scenario, f)
 
@@ -166,7 +166,7 @@ class TestCliRun:
         runner = CliRunner()
         scenario_dir = tmp_path / "scenarios"
         scenario_dir.mkdir()
-        scenario = {"id": "demo", "name": "Demo", "run_command": "echo hi", "input": "x"}
+        scenario = {"id": "demo", "name": "Demo", "run_command": ["echo", "hi"], "input": "x"}
         with open(scenario_dir / "demo.yaml", "w") as f:
             yaml.dump(scenario, f)
 
@@ -246,7 +246,7 @@ class TestCliJudge:
             scenario_data = {
                 "id": "weather",
                 "name": "Weather test",
-                "run_command": "echo test",
+                "run_command": ["echo", "test"],
                 "input": "test",
             }
             with open(scenarios_dir / "weather.yaml", "w") as f:
@@ -308,7 +308,7 @@ class TestCliJudge:
             scenario_data = {
                 "id": "s1",
                 "name": "Test scenario",
-                "run_command": "echo test",
+                "run_command": ["echo", "test"],
                 "input": "test",
             }
             with open(scenarios_dir / "s1.yaml", "w") as f:
@@ -355,7 +355,7 @@ class TestCliJudge:
             scenario_data = {
                 "id": "s1",
                 "name": "Test scenario",
-                "run_command": "echo test",
+                "run_command": ["echo", "test"],
                 "input": "test",
             }
             with open(scenarios_dir / "s1.yaml", "w") as f:
@@ -436,7 +436,7 @@ class TestCliJudge:
                     {
                         "id": "failed",
                         "name": "Failed",
-                        "run_command": "echo x",
+                        "run_command": ["echo", "x"],
                         "input": "x",
                     },
                     f,
@@ -472,7 +472,9 @@ class TestCliJudge:
             )
             (runs_dir / "20260324T120000.json").write_text(manifest.model_dump_json())
             with open(scenarios_dir / "s1.yaml", "w") as f:
-                yaml.dump({"id": "s1", "name": "Test", "run_command": "echo test", "input": "x"}, f)
+                yaml.dump(
+                    {"id": "s1", "name": "Test", "run_command": ["echo", "test"], "input": "x"}, f
+                )
 
             with (
                 patch("kensa.runner.read_trace", return_value=[]),
@@ -742,7 +744,7 @@ class TestCliEval:
             scenario = {
                 "id": "s1",
                 "name": "Test",
-                "run_command": "echo test",
+                "run_command": ["echo", "test"],
                 "input": "test",
             }
             with open(scenario_dir / "s1.yaml", "w") as f:
@@ -792,7 +794,7 @@ class TestCliEval:
                 scenario = {
                     "id": sid,
                     "name": sid,
-                    "run_command": "echo test",
+                    "run_command": ["echo", "test"],
                     "input": "test",
                 }
                 with open(scenario_dir / f"{sid}.yaml", "w") as f:
@@ -824,7 +826,9 @@ class TestCliEval:
             scenario_dir = Path(".kensa/scenarios")
             scenario_dir.mkdir(parents=True)
             with open(scenario_dir / "s1.yaml", "w") as f:
-                yaml.dump({"id": "s1", "name": "Test", "run_command": "echo test", "input": "x"}, f)
+                yaml.dump(
+                    {"id": "s1", "name": "Test", "run_command": ["echo", "test"], "input": "x"}, f
+                )
 
             with (
                 patch("kensa.runner.run_scenarios", return_value=manifest),
@@ -852,7 +856,7 @@ class TestCliEval:
             scenario_dir = Path(".kensa/scenarios")
             scenario_dir.mkdir(parents=True)
             with open(scenario_dir / "s1.yaml", "w") as f:
-                yaml.dump({"id": "s1", "name": "T", "run_command": "echo t", "input": "t"}, f)
+                yaml.dump({"id": "s1", "name": "T", "run_command": ["echo", "t"], "input": "t"}, f)
 
             with (
                 patch("kensa.runner.run_scenarios", return_value=manifest),

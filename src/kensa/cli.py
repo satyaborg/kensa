@@ -706,7 +706,7 @@ source: user
 dataset: example.jsonl
 input_field: ticket
 
-run_command: python .kensa/agents/example.py {{input}}
+run_command: [python, .kensa/agents/example.py]
 
 expected_outcome: Agent assigns the correct priority label for each ticket.
 
@@ -740,7 +740,7 @@ source: user
 
 input: "When I export a report to PDF the charts render without axis labels."
 
-run_command: python .kensa/agents/example.py {{input}}
+run_command: [python, .kensa/agents/example.py]
 
 expected_outcome: Agent outputs the correct priority label (P2).
 

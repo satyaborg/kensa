@@ -26,8 +26,6 @@ _SDK_IMPORT_RE = re.compile(
 
 def _script_paths_from_scenarios() -> set[Path]:
     """Extract Python script paths from scenario run_commands."""
-    import shlex
-
     from kensa.runner import load_scenarios
 
     paths: set[Path] = set()
@@ -36,11 +34,7 @@ def _script_paths_from_scenarios() -> set[Path]:
     except (FileNotFoundError, ValueError):
         return paths
     for scenario in scenarios:
-        if not scenario.run_command:
-            continue
-        # Strip {{input}} before splitting so shlex doesn't choke on braces.
-        tokens = shlex.split(scenario.run_command.replace("{{input}}", ""))
-        for tok in tokens:
+        for tok in scenario.run_command:
             if tok.endswith(".py"):
                 candidate = Path(tok)
                 if candidate.is_file():
