@@ -88,6 +88,10 @@ class TestScenarioSerialization:
             check = Check(type=ct, params={"test": True}, description="test")
             assert check.type == ct
 
+    def test_input_defaults_to_none(self) -> None:
+        scenario = Scenario(id="test", name="test", run_command=["echo", "test"])
+        assert scenario.input is None
+
     def test_input_as_dict(self) -> None:
         scenario = Scenario(
             id="test",
@@ -105,6 +109,15 @@ class TestScenarioSerialization:
             run_command=["echo", "test"],
         )
         assert isinstance(scenario.input, str)
+
+    def test_input_as_empty_string_is_preserved(self) -> None:
+        scenario = Scenario(
+            id="test",
+            name="test",
+            input="",
+            run_command=["echo", "test"],
+        )
+        assert scenario.input == ""
 
 
 class TestScenarioDatasetValidation:

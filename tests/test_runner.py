@@ -32,8 +32,12 @@ class TestBuildCommand:
         assert result[0] == "cmd"
         assert '"key"' in result[1]
 
-    def test_empty_input_not_appended(self) -> None:
+    def test_empty_input_appended_as_empty_arg(self) -> None:
         result = _build_command(["echo", "hello"], "")
+        assert result == ["echo", "hello", ""]
+
+    def test_none_input_not_appended(self) -> None:
+        result = _build_command(["echo", "hello"], None)
         assert result == ["echo", "hello"]
 
     def test_shell_metacharacters_not_executed(self) -> None:
@@ -192,6 +196,68 @@ class TestWriteTrace:
 
 
 class TestRunScenario:
+    def test_run_scenario_omitted_input_does_not_add_argv(self, tmp_path: Path) -> None:
+        """Scenario without input should not receive an extra blank argv element."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "sys.path.insert(0, 'src')",
+                    "from kensa import instrument",
+                    "instrument()",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('test-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', str(len(sys.argv)))",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="no_input",
+            name="No input test",
+            run_command=["python3", str(agent)],
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        assert run.input is None
+        assert read_trace(run.trace_path)[0].output == {"value": "1"}
+
+    def test_run_scenario_preserves_empty_input(self, tmp_path: Path) -> None:
+        """Scenario with explicit empty input should receive an empty argv element."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "sys.path.insert(0, 'src')",
+                    "from kensa import instrument",
+                    "instrument()",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('test-agent')",
+                    "arg = sys.argv[1] if len(sys.argv) > 1 else '<missing>'",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', repr(arg))",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="blank_input",
+            name="Blank input test",
+            run_command=["python3", str(agent)],
+            input="",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        assert run.input == ""
+        assert read_trace(run.trace_path)[0].output == {"value": "''"}
+
     def test_run_scenario_no_traces_raises(self, tmp_path: Path) -> None:
         """Scenario that produces no traces should raise RuntimeError."""
         from kensa.runner import run_scenario
@@ -339,6 +405,23 @@ class TestDatasetRowPassedThrough:
         assert runs[0].dataset_row == {"ticket": "SSO down", "expected": "P1"}
         assert runs[1].dataset_row == {"ticket": "Add dark mode", "expected": "P3"}
         assert runs[0].input == "SSO down"
+
+    def test_empty_dataset_value_is_preserved_in_scenario_run(self, tmp_path: Path) -> None:
+        from kensa.runner import run_scenarios
+
+        scenario_dir = tmp_path / "scenarios"
+        scenario_dir.mkdir()
+        scenario_file = scenario_dir / "test.yaml"
+        scenario_file.write_text(
+            "id: test\nname: test\nrun_command: [echo]\ndataset: data.jsonl\ninput_field: ticket\n"
+        )
+        dataset = scenario_dir / "data.jsonl"
+        dataset.write_text('{"ticket": "", "expected": "blank"}\n')
+        manifest = run_scenarios(scenario_dir=str(scenario_dir))
+        runs = manifest.scenarios["test"]
+        assert len(runs) == 1
+        assert runs[0].dataset_row == {"ticket": "", "expected": "blank"}
+        assert runs[0].input == ""
 
 
 class TestRunScenarios:

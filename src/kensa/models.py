@@ -135,7 +135,7 @@ class Scenario(BaseModel):
     description: str = ""
     source: ScenarioSource = ScenarioSource.CODE
 
-    input: str | dict[str, Any] = ""
+    input: str | dict[str, Any] | None = None
     run_command: list[str] = Field(default_factory=list)
     env_overrides: dict[str, str] = Field(default_factory=dict)
 

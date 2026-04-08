@@ -571,6 +571,64 @@ class TestErrorPaths:
         assert spans[0].output is not None
         assert "integration_value" in str(spans[0].output)
 
+    def test_explicit_blank_input_reaches_subprocess(self, tmp_path: Path) -> None:
+        """An explicit empty-string input should be passed as argv[1]."""
+        agent = _write_agent(
+            tmp_path,
+            """\
+            import sys
+            sys.path.insert(0, "src")
+            from kensa import instrument
+            instrument()
+            from opentelemetry import trace
+            tracer = trace.get_tracer("test-agent")
+            arg = sys.argv[1] if len(sys.argv) > 1 else "<missing>"
+            with tracer.start_as_current_span("ChatCompletion") as span:
+                span.set_attribute("openinference.span.kind", "LLM")
+                span.set_attribute("llm.model_name", "test-model")
+                span.set_attribute("output.value", repr(arg))
+            """,
+        )
+        scenario = Scenario(
+            id="blank_input",
+            name="Blank input test",
+            run_command=[PYTHON, str(agent)],
+            input="",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
+
+        spans = read_trace(run.trace_path)
+        assert run.input == ""
+        assert spans[0].output == {"value": "''"}
+
+    def test_omitted_input_does_not_reach_subprocess(self, tmp_path: Path) -> None:
+        """A scenario without input should not receive an extra argv element."""
+        agent = _write_agent(
+            tmp_path,
+            """\
+            import sys
+            sys.path.insert(0, "src")
+            from kensa import instrument
+            instrument()
+            from opentelemetry import trace
+            tracer = trace.get_tracer("test-agent")
+            with tracer.start_as_current_span("ChatCompletion") as span:
+                span.set_attribute("openinference.span.kind", "LLM")
+                span.set_attribute("llm.model_name", "test-model")
+                span.set_attribute("output.value", str(len(sys.argv)))
+            """,
+        )
+        scenario = Scenario(
+            id="no_input",
+            name="No input test",
+            run_command=[PYTHON, str(agent)],
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=15)
+
+        spans = read_trace(run.trace_path)
+        assert run.input is None
+        assert spans[0].output == {"value": "1"}
+
 
 # ---------------------------------------------------------------------------
 # Tier 1: CLI end-to-end (no API keys)
