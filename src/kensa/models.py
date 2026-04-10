@@ -97,6 +97,12 @@ _LIST_PARAM_CHECKS: dict[CheckType, str] = {
     CheckType.TOOL_ORDER: "order",
 }
 
+_LIST_PARAM_ITEM_LABELS: dict[CheckType, str] = {
+    CheckType.TOOLS_CALLED: "tool",
+    CheckType.TOOLS_NOT_CALLED: "tool",
+    CheckType.TOOL_ORDER: "item",
+}
+
 
 def _is_bare_placeholder(value: str) -> bool:
     return value.startswith("{{") and value.endswith("}}") and value.count("{{") == 1
@@ -112,9 +118,10 @@ def validate_runtime_list_params(check_type: CheckType, params: dict[str, Any]) 
     if value is None:
         raise ValueError(f"{check_name}: missing required '{key}' parameter")
     if isinstance(value, str):
+        item_label = _LIST_PARAM_ITEM_LABELS.get(check_type, "item")
         raise ValueError(
             f"{check_name}: '{key}' must be a list of strings, got a bare string. "
-            f"Use [{value!r}] for a single tool."
+            f"Use [{value!r}] for a single {item_label}."
         )
     if not isinstance(value, list):
         raise ValueError(

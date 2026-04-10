@@ -28,6 +28,7 @@ from kensa.models import (
     Span,
     SpanKind,
     TraceSummary,
+    _is_bare_placeholder,
     validate_runtime_list_params,
 )
 from kensa.paths import judge_prompt_path
@@ -389,7 +390,7 @@ def _substitute_value(v: Any, row: dict[str, Any]) -> Any:
     types for check thresholds). An embedded placeholder coerces to ``str``.
     """
     if isinstance(v, str) and "{{" in v:
-        if v.startswith("{{") and v.endswith("}}") and v.count("{{") == 1:
+        if _is_bare_placeholder(v):
             field = v[2:-2]
             if field in row:
                 return row[field]

@@ -248,6 +248,10 @@ class TestCheckParamValidation:
         with pytest.raises(ValueError, match=r"Use \['search'\]"):
             Check(type=CheckType.TOOLS_CALLED, params={"tools": "search"})
 
+    def test_tool_order_scalar_hint_uses_item_language(self) -> None:
+        with pytest.raises(ValueError, match=r"Use \['setup'\] for a single item\."):
+            Check(type=CheckType.TOOL_ORDER, params={"order": "setup"})
+
     @pytest.mark.parametrize(
         ("check_type", "key"),
         [
