@@ -47,28 +47,30 @@ def check_output_matches(spans: list[Span], params: dict[str, Any]) -> CheckResu
     )
 
 
-def check_tool_called(spans: list[Span], params: dict[str, Any]) -> CheckResult:
-    """Check that a tool with the given name was called."""
-    name = params.get("name", "")
-    tool_names = get_tool_names(spans)
-    found = name in tool_names
-    return CheckResult(
-        check="tool_called",
-        passed=found,
-        detail=f"Tool {name!r} {'found' if found else 'not found'} in {tool_names}",
-    )
+def check_tools_called(spans: list[Span], params: dict[str, Any]) -> CheckResult:
+    """Check that all named tools were called."""
+    expected: list[str] = params["tools"]
+    actual = get_tool_names(spans)
+    missing = [name for name in expected if name not in actual]
+    passed = not missing
+    if passed:
+        detail = f"All expected tools called: {expected}"
+    else:
+        detail = f"Missing tools: {missing} (called: {actual})"
+    return CheckResult(check="tools_called", passed=passed, detail=detail)
 
 
-def check_tool_not_called(spans: list[Span], params: dict[str, Any]) -> CheckResult:
-    """Check that a tool with the given name was NOT called."""
-    name = params.get("name", "")
-    tool_names = get_tool_names(spans)
-    found = name in tool_names
-    return CheckResult(
-        check="tool_not_called",
-        passed=not found,
-        detail=f"Tool {name!r} {'found (unexpected)' if found else 'not found (expected)'}",
-    )
+def check_tools_not_called(spans: list[Span], params: dict[str, Any]) -> CheckResult:
+    """Check that none of the named tools were called."""
+    forbidden: list[str] = params["tools"]
+    actual = get_tool_names(spans)
+    present = [name for name in forbidden if name in actual]
+    passed = not present
+    if passed:
+        detail = f"None of the forbidden tools called: {forbidden}"
+    else:
+        detail = f"Forbidden tools called: {present}"
+    return CheckResult(check="tools_not_called", passed=passed, detail=detail)
 
 
 def check_tool_order(spans: list[Span], params: dict[str, Any]) -> CheckResult:
@@ -158,8 +160,8 @@ CheckFn = Callable[[list[Span], dict[str, Any]], CheckResult]
 CHECK_REGISTRY: dict[CheckType, CheckFn] = {
     CheckType.OUTPUT_CONTAINS: check_output_contains,
     CheckType.OUTPUT_MATCHES: check_output_matches,
-    CheckType.TOOL_CALLED: check_tool_called,
-    CheckType.TOOL_NOT_CALLED: check_tool_not_called,
+    CheckType.TOOLS_CALLED: check_tools_called,
+    CheckType.TOOLS_NOT_CALLED: check_tools_not_called,
     CheckType.TOOL_ORDER: check_tool_order,
     CheckType.MAX_COST: check_max_cost,
     CheckType.MAX_TURNS: check_max_turns,

@@ -141,7 +141,7 @@ Repeat until the judge's verdicts match your expectations. Then run `kensa eval`
 Exhaust deterministic checks before reaching for an LLM judge. Many criteria that seem subjective reduce to code:
 - Format validation → `output_matches` with regex
 - Required content → `output_contains`
-- Tool usage → `tool_called`, `tool_not_called`, `tool_order`
+- Tool usage → `tools_called`, `tools_not_called`, `tool_order`
 - Resource limits → `max_cost`, `max_turns`, `max_duration`
 
 Reserve judge prompts for criteria that genuinely require interpretation: tone, faithfulness, relevance, completeness.

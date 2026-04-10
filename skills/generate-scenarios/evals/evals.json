@@ -4,11 +4,11 @@
     {
       "id": 1,
       "prompt": "I need eval scenarios for my SDR lead qualification agent in examples/sdr-qualifier/. It scores leads as hot/warm/cold/disqualified using an ICP, then drafts personalized outreach. It has a lookup_icp tool. Generate a good initial set of scenarios.",
-      "expected_output": "Generates 4-6 scenarios covering: (1) happy path — enterprise lead scored hot with meeting booked, (2) disqualification — government entity correctly rejected, (3) tool usage — agent calls lookup_icp before scoring, (4) outreach quality — message follows the 3-sentence/one-CTA rules, (5) edge case — ambiguous lead that could go either way. Each scenario has appropriate deterministic checks (tool_called for lookup_icp, output_contains for score labels, max_turns, max_cost). Scenarios saved to .kensa/scenarios/. Summary table presented. Ends with 'run kensa eval -s <id> to validate'.",
+      "expected_output": "Generates 4-6 scenarios covering: (1) happy path — enterprise lead scored hot with meeting booked, (2) disqualification — government entity correctly rejected, (3) tool usage — agent calls lookup_icp before scoring, (4) outreach quality — message follows the 3-sentence/one-CTA rules, (5) edge case — ambiguous lead that could go either way. Each scenario has appropriate deterministic checks (tools_called for lookup_icp, output_contains for score labels, max_turns, max_cost). Scenarios saved to .kensa/scenarios/. Summary table presented. Ends with 'run kensa eval -s <id> to validate'.",
       "files": [],
       "assertions": [
         "Produces at least 3 scenario YAML files",
-        "At least one scenario includes a tool_called check for lookup_icp",
+        "At least one scenario includes a tools_called check for lookup_icp",
         "At least one scenario tests a disqualification path",
         "Every scenario has at least one deterministic check",
         "Every scenario includes max_cost or max_turns bounds",
@@ -18,7 +18,7 @@
     {
       "id": 2,
       "prompt": "My last eval run showed the SDR agent isn't checking the ICP disqualifiers — it qualified a government lead as 'warm' when it should have been disqualified. Here's the diagnosis:\n\nFailed scenarios: sdr_gov_lead\nFailure types: 1 check failure (output_contains 'disqualified')\nRoot cause: agent not consulting disqualifiers before scoring\nFix category: scenario gap — need targeted disqualifier coverage\n\nWrite scenarios that specifically target the disqualification logic.",
-      "expected_output": "Uses the diagnosis context to write targeted scenarios — not generic ones. Creates 2-3 scenarios specifically testing disqualifier paths: government entity, company too small, direct competitor, student project. Each has output_contains checks for 'disqualified' and tool_called for lookup_icp with 'disqualifiers' aspect. Does NOT regenerate the entire scenario set from scratch.",
+      "expected_output": "Uses the diagnosis context to write targeted scenarios — not generic ones. Creates 2-3 scenarios specifically testing disqualifier paths: government entity, company too small, direct competitor, student project. Each has output_contains checks for 'disqualified' and tools_called for lookup_icp with 'disqualifiers' aspect. Does NOT regenerate the entire scenario set from scratch.",
       "files": [],
       "assertions": [
         "Scenarios specifically target disqualifier paths (not generic happy paths)",

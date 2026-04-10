@@ -765,6 +765,123 @@ class TestJudgeScenarioWithDatasetRow:
         assert result.check_results[0].passed is False
 
 
+class TestPostSubstitutionValidation:
+    """Post-substitution param validation catches bad dataset values."""
+
+    def test_whole_list_substitution_works(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="whole_list_sub",
+            name="Whole list substitution",
+            run_command=["echo", "test"],
+            checks=[
+                Check(
+                    type=CheckType.TOOLS_CALLED,
+                    params={"tools": "{{tool_names}}"},
+                ),
+            ],
+        )
+        row = {"tool_names": ["get_weather"]}
+        result = judge_scenario(scenario, sample_spans, "traces/t.jsonl", dataset_row=row)
+        assert result.status == ResultStatus.PASS
+        assert result.check_results[0].passed is True
+
+    def test_whole_list_substitution_with_wrong_type_fails(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="whole_list_bad_sub",
+            name="Whole list bad substitution",
+            run_command=["echo", "test"],
+            checks=[
+                Check(
+                    type=CheckType.TOOLS_NOT_CALLED,
+                    params={"tools": "{{forbidden_tools}}"},
+                ),
+            ],
+        )
+        row = {"forbidden_tools": "delete_account"}
+        result = judge_scenario(scenario, sample_spans, "traces/t.jsonl", dataset_row=row)
+        assert result.status == ResultStatus.FAIL
+        assert result.check_results[0].passed is False
+        assert "must be a list of strings" in result.check_results[0].detail
+
+    def test_non_string_dataset_value_in_tools_list(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        """Dataset provides int for a tools list item — should fail, not mislead."""
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="bad_sub",
+            name="Bad substitution",
+            run_command=["echo", "test"],
+            checks=[
+                Check(
+                    type=CheckType.TOOLS_CALLED,
+                    params={"tools": ["{{tool_name}}"]},
+                ),
+            ],
+        )
+        row = {"tool_name": 123}
+        result = judge_scenario(scenario, sample_spans, "traces/t.jsonl", dataset_row=row)
+        assert result.status == ResultStatus.FAIL
+        assert result.check_results[0].passed is False
+        assert "must contain only strings" in result.check_results[0].detail
+
+    def test_none_dataset_value_in_tools_list(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="none_sub",
+            name="None substitution",
+            run_command=["echo", "test"],
+            checks=[
+                Check(
+                    type=CheckType.TOOLS_NOT_CALLED,
+                    params={"tools": ["{{forbidden}}"]},
+                ),
+            ],
+        )
+        row = {"forbidden": None}
+        result = judge_scenario(scenario, sample_spans, "traces/t.jsonl", dataset_row=row)
+        assert result.status == ResultStatus.FAIL
+        assert result.check_results[0].passed is False
+
+    def test_valid_string_substitution_still_works(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="good_sub",
+            name="Good substitution",
+            run_command=["echo", "test"],
+            checks=[
+                Check(
+                    type=CheckType.TOOLS_CALLED,
+                    params={"tools": ["{{tool_name}}"]},
+                ),
+            ],
+        )
+        row = {"tool_name": "get_weather"}
+        result = judge_scenario(scenario, sample_spans, "traces/t.jsonl", dataset_row=row)
+        # Check runs (doesn't error) — whether it passes depends on spans, not validation
+        assert result.check_results[0].check == "tools_called"
+
+
 class TestBuildJudgePromptInput:
     """Tests for scenario_input inclusion in judge prompt."""
 

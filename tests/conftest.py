@@ -82,8 +82,8 @@ def sample_scenario() -> Scenario:
         expected_outcome="Agent returns weather information for San Francisco",
         checks=[
             Check(
-                type=CheckType.TOOL_CALLED,
-                params={"name": "get_weather"},
+                type=CheckType.TOOLS_CALLED,
+                params={"tools": ["get_weather"]},
                 description="Agent should call the weather tool",
             ),
             Check(

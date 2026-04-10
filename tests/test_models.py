@@ -80,12 +80,19 @@ class TestScenarioSerialization:
         restored = Scenario.model_validate(data)
         assert restored.id == "smoke_test"
         assert len(restored.checks) == 3
-        assert restored.checks[0].type == CheckType.TOOL_CALLED
+        assert restored.checks[0].type == CheckType.TOOLS_CALLED
         assert restored.source == ScenarioSource.CODE
 
     def test_check_types(self) -> None:
+        # Checks with list-param validation need valid params.
+        valid_params: dict[CheckType, dict[str, object]] = {
+            CheckType.TOOLS_CALLED: {"tools": ["t"]},
+            CheckType.TOOLS_NOT_CALLED: {"tools": ["t"]},
+            CheckType.TOOL_ORDER: {"order": ["t"]},
+        }
         for ct in CheckType:
-            check = Check(type=ct, params={"test": True}, description="test")
+            params = valid_params.get(ct, {"test": True})
+            check = Check(type=ct, params=params, description="test")
             assert check.type == ct
 
     def test_input_defaults_to_none(self) -> None:
@@ -158,6 +165,109 @@ class TestScenarioDatasetValidation:
                 run_command=["echo"],
                 input_field="query",
             )
+
+
+class TestCheckParamValidation:
+    """Validate that Check._validate_params catches bad param shapes at parse time."""
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_scalar_string_instead_of_list(self, check_type: CheckType, key: str) -> None:
+        with pytest.raises(ValueError, match="must be a list of strings, got a bare string"):
+            Check(type=check_type, params={key: "search"})
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_missing_required_key(self, check_type: CheckType, key: str) -> None:
+        del key
+        with pytest.raises(ValueError, match="missing required"):
+            Check(type=check_type, params={})
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_empty_list(self, check_type: CheckType, key: str) -> None:
+        with pytest.raises(ValueError, match="must not be empty"):
+            Check(type=check_type, params={key: []})
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_non_string_items(self, check_type: CheckType, key: str) -> None:
+        with pytest.raises(ValueError, match="must contain only strings"):
+            Check(type=check_type, params={key: [1, 2]})
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_valid_single_item(self, check_type: CheckType, key: str) -> None:
+        check = Check(type=check_type, params={key: ["search"]})
+        assert check.params[key] == ["search"]
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_valid_multi_item(self, check_type: CheckType, key: str) -> None:
+        check = Check(type=check_type, params={key: ["search", "fetch"]})
+        assert check.params[key] == ["search", "fetch"]
+
+    def test_scalar_hint_includes_tool_name(self) -> None:
+        """Error message should suggest the fix: Use ['search'] for a single tool."""
+        with pytest.raises(ValueError, match=r"Use \['search'\]"):
+            Check(type=CheckType.TOOLS_CALLED, params={"tools": "search"})
+
+    @pytest.mark.parametrize(
+        ("check_type", "key"),
+        [
+            (CheckType.TOOLS_CALLED, "tools"),
+            (CheckType.TOOLS_NOT_CALLED, "tools"),
+            (CheckType.TOOL_ORDER, "order"),
+        ],
+    )
+    def test_bare_placeholder_string_allowed_at_parse_time(
+        self,
+        check_type: CheckType,
+        key: str,
+    ) -> None:
+        check = Check(type=check_type, params={key: "{{items}}"})
+        assert check.params[key] == "{{items}}"
+
+    def test_unrelated_check_type_not_validated(self) -> None:
+        """Check types that don't need list params should pass without them."""
+        check = Check(type=CheckType.OUTPUT_CONTAINS, params={"value": "hello"})
+        assert check.type == CheckType.OUTPUT_CONTAINS
 
 
 class TestResultSerialization:

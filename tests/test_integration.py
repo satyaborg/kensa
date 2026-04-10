@@ -213,7 +213,7 @@ class TestDeterministicChecks:
             run_command=[PYTHON, str(agent)],
             input="What is the weather?",
             checks=[
-                Check(type=CheckType.TOOL_CALLED, params={"name": "get_weather"}),
+                Check(type=CheckType.TOOLS_CALLED, params={"tools": ["get_weather"]}),
                 Check(type=CheckType.OUTPUT_CONTAINS, params={"value": "sunny"}),
                 Check(type=CheckType.MAX_TURNS, params={"max": 5}),
             ],
@@ -254,7 +254,7 @@ class TestDeterministicChecks:
             run_command=[PYTHON, str(agent)],
             input="test",
             checks=[
-                Check(type=CheckType.TOOL_CALLED, params={"name": "missing_tool"}),
+                Check(type=CheckType.TOOLS_CALLED, params={"tools": ["missing_tool"]}),
                 Check(type=CheckType.OUTPUT_CONTAINS, params={"value": "answer"}),
             ],
             # criteria set, but judge should be skipped because checks fail

@@ -28,6 +28,7 @@ from kensa.models import (
     Span,
     SpanKind,
     TraceSummary,
+    validate_runtime_list_params,
 )
 from kensa.paths import judge_prompt_path
 from kensa.utils import count_tool_calls, extract_output_text, get_tool_names
@@ -429,6 +430,11 @@ def judge_scenario(
         check_type = CheckType(check.type)
         check_fn = CHECK_REGISTRY[check_type]
         params = _substitute_params(check.params, dataset_row)
+        try:
+            validate_runtime_list_params(check_type, params)
+        except ValueError as e:
+            check_results.append(CheckResult(check=check_type.value, passed=False, detail=str(e)))
+            continue
         result = check_fn(spans, params)
         check_results.append(result)
 

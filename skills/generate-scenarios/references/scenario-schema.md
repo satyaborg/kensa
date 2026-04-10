@@ -43,9 +43,9 @@ failure_pattern: string            # failure pattern this targets (Mode B)
 |-------|--------|-------|
 | `output_contains` | `value: string`, `case_sensitive: bool` (default: false) | Output includes string (case-insensitive) |
 | `output_matches` | `pattern: regex` | Output matches regex |
-| `tool_called` | `name: string` | Tool was called |
-| `tool_not_called` | `name: string` | Tool was NOT called |
-| `tool_order` | `order: [string]` | Tools called in sequence |
+| `tools_called` | `tools: [string]` | All listed tools were called (set membership, order-free) |
+| `tools_not_called` | `tools: [string]` | None of the listed tools were called |
+| `tool_order` | `order: [string]` | Tools called in this temporal sequence (opt-in; use only when order is load-bearing — setup → migrate → test. Default to `tools_called` for presence intent per [Anthropic's agent eval guidance](https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents): grade outcomes, not paths.) |
 | `max_cost` | `max: float` | Total cost under threshold (USD) |
 | `max_turns` | `max: int` | LLM call count under N |
 | `max_duration` | `max_seconds: float` | Elapsed time under threshold |
@@ -62,8 +62,8 @@ input: "What's the weather in Tokyo?"
 run_command: [uv, run, python, agent.py]
 expected_outcome: Agent calls get_weather tool and returns temperature for Tokyo
 checks:
-  - type: tool_called
-    params: { name: get_weather }
+  - type: tools_called
+    params: { tools: [get_weather] }
     description: Must use the weather tool
   - type: output_contains
     params: { value: Tokyo }

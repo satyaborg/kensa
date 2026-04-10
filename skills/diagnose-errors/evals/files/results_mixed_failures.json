@@ -3,7 +3,7 @@
     "scenario_id": "sdr_enterprise_hot",
     "status": "pass",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "hot"}, "passed": true},
       {"check": "output_contains", "params": {"value": "book_meeting"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
@@ -14,7 +14,7 @@
     "scenario_id": "sdr_gov_disqualify",
     "status": "fail",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "disqualified"}, "passed": false},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
     ],
@@ -25,7 +25,7 @@
     "scenario_id": "sdr_warm_nurture",
     "status": "fail",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "warm"}, "passed": true},
       {"check": "output_contains", "params": {"value": "nurture_sequence"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
@@ -36,7 +36,7 @@
     "scenario_id": "sdr_cold_partial",
     "status": "pass",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "cold"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
     ],
@@ -46,7 +46,7 @@
     "scenario_id": "sdr_no_icp_check",
     "status": "fail",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": false},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": false},
       {"check": "output_contains", "params": {"value": "warm"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
     ],

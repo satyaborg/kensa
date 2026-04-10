@@ -51,9 +51,9 @@ Deterministic check types — fast, cheap, binary. Run before the LLM judge to s
 
 - `output_contains`: Output includes a string or pattern
 - `output_matches`: Output matches a regex
-- `tool_called`: A specific tool was invoked
-- `tool_not_called`: A specific tool was not invoked
-- `tool_order`: Tools called in expected sequence
+- `tools_called`: All listed tools were invoked (set membership, order-free)
+- `tools_not_called`: None of the listed tools were invoked
+- `tool_order`: Tools called in this temporal sequence (use only when order is load-bearing)
 - `max_cost`: Total cost under threshold
 - `max_turns`: LLM call count under limit
 - `max_duration`: Execution time under limit

@@ -33,7 +33,7 @@ kensa report --format json
 ```
 
 Or read directly from `.kensa/results/`. Identify which scenarios failed and how:
-- **Check failure**: a deterministic check (tool_called, output_contains, etc.) failed
+- **Check failure**: a deterministic check (tools_called, output_contains, etc.) failed
 - **Judge rejection**: all checks passed but the LLM judge said fail
 - **Error**: scenario crashed, timed out, or judge errored
 - **Uncertain**: judge couldn't determine pass/fail
@@ -45,7 +45,7 @@ Or read directly from `.kensa/results/`. Identify which scenarios failed and how
 Read the `check_results` array. The failed check tells you exactly what went wrong.
 
 Present as:
-> `weather_no_tool`: FAIL, `tool_called` check failed
+> `weather_no_tool`: FAIL, `tools_called` check failed
 > The agent answered without calling `get_weather`, likely hallucinating data.
 > **Fix:** Check the system prompt; ensure it instructs the agent to use tools.
 
@@ -106,7 +106,7 @@ Summarize findings as context for the next skill invocation:
 
 ```
 Failed scenarios: weather_no_tool, weather_accuracy
-Failure types: 1 check failure (tool_called), 1 judge rejection
+Failure types: 1 check failure (tools_called), 1 judge rejection
 Root cause: agent not using weather tool for direct queries
 Fix category: agent bug, system prompt doesn't instruct tool use
 Recommended action: fix agent, then re-run kensa eval

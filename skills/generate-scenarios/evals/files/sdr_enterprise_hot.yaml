@@ -12,8 +12,8 @@ input: |
 run_command: [uv, run, python, examples/sdr-qualifier/agent.py]
 expected_outcome: Agent checks ICP, scores as hot (enterprise + multiple signals + budget authority implied), recommends book_meeting, drafts concise personalized outreach referencing Series D and platform expansion.
 checks:
-  - type: tool_called
-    params: { name: lookup_icp }
+  - type: tools_called
+    params: { tools: [lookup_icp] }
     description: Must consult ICP before scoring
   - type: output_contains
     params: { value: hot }

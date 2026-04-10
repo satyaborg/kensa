@@ -36,7 +36,7 @@ def _make_results() -> list[Result]:
             scenario_id="test_fail",
             status=ResultStatus.FAIL,
             check_results=[
-                CheckResult(check="tool_called", passed=False, detail="Tool 'search' not found"),
+                CheckResult(check="tools_called", passed=False, detail="Missing tools: ['search']"),
             ],
             trace=TraceSummary(
                 path="traces/fail.jsonl",
@@ -76,7 +76,7 @@ class TestMarkdownFormat:
     def test_failures_section(self) -> None:
         output = format_markdown(_make_results())
         assert "### Failures" in output
-        assert "tool_called" in output
+        assert "tools_called" in output
 
     def test_pass_only(self) -> None:
         results = [_make_results()[0]]

@@ -12,7 +12,7 @@
     "scenario_id": "sdr_gov_disqualify",
     "status": "pass",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "disqualified"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
     ],
@@ -31,7 +31,7 @@
     "scenario_id": "sdr_cold_partial",
     "status": "pass",
     "check_results": [
-      {"check": "tool_called", "params": {"name": "lookup_icp"}, "passed": true},
+      {"check": "tools_called", "params": {"tools": ["lookup_icp"]}, "passed": true},
       {"check": "output_contains", "params": {"value": "cold"}, "passed": true},
       {"check": "max_turns", "params": {"max": 5}, "passed": true}
     ],
