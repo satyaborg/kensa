@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
-# Usage: ./scripts/release.sh <patch|minor|major>
+# Usage: ./scripts/release-prep.sh <patch|minor|major>
 #
-# Bumps the version in pyproject.toml,
-# generates the changelog with git-cliff, commits, creates a git tag,
-# and pushes to origin. GitHub Actions handles PyPI + GitHub Release.
+# Creates a release branch with version bump + changelog,
+# then opens a PR against main. Merge the PR, then run release-tag.sh.
 
 set -euo pipefail
 
@@ -16,6 +15,7 @@ BUMP="${1:-}"
 
 # ── Prereqs ──────────────────────────────────────────────────────────
 command -v git-cliff >/dev/null 2>&1 || die "git-cliff not found. Install: cargo install git-cliff"
+command -v gh >/dev/null 2>&1 || die "gh CLI not found. Install: https://cli.github.com"
 
 # ── Must be on main with a clean tree ────────────────────────────────
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -54,6 +54,10 @@ if git rev-parse "$TAG" >/dev/null 2>&1; then
     die "tag $TAG already exists"
 fi
 
+# ── Create release branch ────────────────────────────────────────────
+RELEASE_BRANCH="chore/release-${TAG}"
+git checkout -b "$RELEASE_BRANCH"
+
 # ── Update version strings ───────────────────────────────────────────
 sed -i '' "s/^version = \"${CURRENT}\"/version = \"${NEXT}\"/" pyproject.toml
 
@@ -69,16 +73,18 @@ print(cfg['project']['version'])
 info "generating changelog"
 git-cliff --tag "$TAG" -o CHANGELOG.md
 
-# ── Commit, tag, push ────────────────────────────────────────────────
-info "committing version bump + changelog"
+# ── Commit and open PR ───────────────────────────────────────────────
 git add pyproject.toml CHANGELOG.md
 git commit -m "chore: release ${TAG}"
+git push -u origin "$RELEASE_BRANCH"
 
-info "tagging $TAG"
-git tag -a "$TAG" -m "Release ${TAG}"
+gh pr create \
+    --title "chore: release ${TAG}" \
+    --body "Bump version to ${NEXT} and update changelog.
 
-info "pushing to origin"
-git push origin main
-git push origin "$TAG"
+Merge this PR, then run:
+\`\`\`
+./scripts/release-tag.sh ${TAG}
+\`\`\`"
 
-info "done — $TAG pushed. GitHub Actions will handle PyPI + GitHub Release."
+info "PR created. Merge it, then run: ./scripts/release-tag.sh ${TAG}"
