@@ -112,17 +112,6 @@ kensa init                    # scaffold .kensa/ with example scenario
 
 Labels live at `.kensa/labels/{judge-name}.yaml`. They are NOT the same as judge prompt examples. Labels are held-out validation data, never reuse them as few-shot examples in the judge prompt.
 
-## Evals for skills
-
-Every skill has `evals/evals.json` with 2-3 test cases. Each test case has:
-- `id`: sequential integer
-- `prompt`: what the user says (realistic, not contrived)
-- `expected_output`: what the skill should produce (behavior, not exact text)
-- `files`: fixture files the test needs (paths relative to evals/)
-- `assertions`: specific, falsifiable claims about the output
-
-Write assertions that test judgment, not just execution. "Recommends ONE action" tests judgment. "Calls kensa eval" tests execution. Both matter, but judgment assertions catch more regressions.
-
 ## Line budget
 
 Keep SKILL.md under 200 lines. If you need more, extract schemas into `references/` and scripts into `scripts/`. The agent's context window is finite, every line competes with the user's codebase for attention.

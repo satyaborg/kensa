@@ -60,4 +60,4 @@ Pre-commit hooks run ruff and ty automatically on commit.
 
 ## Releases
 
-Releases are maintainer-only. Run `./scripts/release.sh <patch|minor|major>` from a clean `main` branch, it bumps the version, generates the changelog, tags, and pushes. GitHub Actions handles PyPI publishing via trusted OIDC.
+Releases are maintainer-only. Run `./scripts/release-prep.sh <patch|minor|major>` from a clean `main` branch — it bumps the version, generates the changelog, and opens a PR. After merging, run `./scripts/release-tag.sh <tag>` to tag and push. GitHub Actions handles PyPI publishing via trusted OIDC.
