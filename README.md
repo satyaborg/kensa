@@ -1,7 +1,7 @@
 <div align="center">
 
 <br>
-<img src="assets/banner.png" alt="kensa - the open source agent evals harness" width="800">
+<img src="https://raw.githubusercontent.com/satyaborg/kensa/main/assets/banner.png" alt="kensa - the open source agent evals harness" width="800">
 <br><br>
 
 <p>Tell your coding agent to evaluate an agent. Get a working eval suite in minutes.</p>
