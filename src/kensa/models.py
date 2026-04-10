@@ -21,8 +21,8 @@ class SpanKind(str, enum.Enum):
 class CheckType(str, enum.Enum):
     OUTPUT_CONTAINS = "output_contains"
     OUTPUT_MATCHES = "output_matches"
-    TOOL_CALLED = "tool_called"
-    TOOL_NOT_CALLED = "tool_not_called"
+    TOOLS_CALLED = "tools_called"
+    TOOLS_NOT_CALLED = "tools_not_called"
     TOOL_ORDER = "tool_order"
     MAX_COST = "max_cost"
     MAX_TURNS = "max_turns"
@@ -91,12 +91,65 @@ class Span(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+_LIST_PARAM_CHECKS: dict[CheckType, str] = {
+    CheckType.TOOLS_CALLED: "tools",
+    CheckType.TOOLS_NOT_CALLED: "tools",
+    CheckType.TOOL_ORDER: "order",
+}
+
+_LIST_PARAM_ITEM_LABELS: dict[CheckType, str] = {
+    CheckType.TOOLS_CALLED: "tool",
+    CheckType.TOOLS_NOT_CALLED: "tool",
+    CheckType.TOOL_ORDER: "item",
+}
+
+
+def _is_bare_placeholder(value: str) -> bool:
+    return value.startswith("{{") and value.endswith("}}") and value.count("{{") == 1
+
+
+def validate_runtime_list_params(check_type: CheckType, params: dict[str, Any]) -> None:
+    key = _LIST_PARAM_CHECKS.get(check_type)
+    if key is None:
+        return
+
+    check_name = check_type.value
+    value = params.get(key)
+    if value is None:
+        raise ValueError(f"{check_name}: missing required '{key}' parameter")
+    if isinstance(value, str):
+        item_label = _LIST_PARAM_ITEM_LABELS.get(check_type, "item")
+        raise ValueError(
+            f"{check_name}: '{key}' must be a list of strings, got a bare string. "
+            f"Use [{value!r}] for a single {item_label}."
+        )
+    if not isinstance(value, list):
+        raise ValueError(
+            f"{check_name}: '{key}' must be a list of strings, got {type(value).__name__}"
+        )
+    if not value:
+        raise ValueError(f"{check_name}: '{key}' must not be empty")
+    bad = [item for item in value if not isinstance(item, str)]
+    if bad:
+        raise ValueError(f"{check_name}: '{key}' must contain only strings, got: {bad}")
+
+
 class Check(BaseModel):
     """A deterministic check within a scenario."""
 
     type: CheckType
     params: dict[str, Any] = Field(default_factory=dict)
     description: str = ""
+
+    @model_validator(mode="after")
+    def _validate_params(self) -> Check:
+        key = _LIST_PARAM_CHECKS.get(self.type)
+        if key is not None:
+            value = self.params.get(key)
+            if isinstance(value, str) and _is_bare_placeholder(value):
+                return self
+        validate_runtime_list_params(self.type, self.params)
+        return self
 
 
 class JudgePromptExample(BaseModel):

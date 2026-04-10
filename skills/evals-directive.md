@@ -74,7 +74,7 @@ The agent is smart. It doesn't need to be convinced or motivated. It needs domai
 
 **Hand-off context.** Each skill produces a summary that the next skill consumes. Include: what was done, what was found, what to do next. The next skill shouldn't start from scratch.
 
-**Deterministic before LLM.** Exhaust code-based checks (regex, schema, tool_called) before reaching for an LLM judge. Many "subjective" criteria reduce to keyword checks when you understand the domain.
+**Deterministic before LLM.** Exhaust code-based checks (regex, schema, tools_called) before reaching for an LLM judge. Many "subjective" criteria reduce to keyword checks when you understand the domain.
 
 **Binary pass/fail.** No Likert scales, no letter grades, no partial credit. Binary forces clear decision boundaries and makes calibration measurable.
 

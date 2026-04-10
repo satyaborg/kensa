@@ -82,7 +82,7 @@ After writing, present a summary table:
 
 | # | Scenario ID | Tests | Checks | Priority |
 |---|-------------|-------|--------|----------|
-| 1 | weather_basic | Happy path weather query | tool_called, output_contains, max_turns | Correctness |
+| 1 | weather_basic | Happy path weather query | tools_called, output_contains, max_turns | Correctness |
 | 2 | weather_edge | Empty city input | output_contains | Edge case |
 
 One line per scenario. Ask if the user wants adjustments before running.

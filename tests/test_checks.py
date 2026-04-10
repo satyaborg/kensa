@@ -13,9 +13,9 @@ from kensa.checks import (
     check_no_repeat_calls,
     check_output_contains,
     check_output_matches,
-    check_tool_called,
-    check_tool_not_called,
     check_tool_order,
+    check_tools_called,
+    check_tools_not_called,
     run_checks,
 )
 from kensa.models import CheckType, CostInfo, Span, SpanKind, TokenCounts, ToolInfo
@@ -229,49 +229,72 @@ class TestOutputMatches:
         assert check_output_matches([early, late], {"pattern": r"^FAIL$"}).passed is False
 
 
-class TestToolCalled:
-    """Check: tool_called — tool name appears in spans."""
+class TestToolsCalled:
+    """Check: tools_called — all named tools must appear in spans (set membership)."""
 
-    def test_found_on_tool_span(self) -> None:
-        assert check_tool_called([_tool("search")], {"name": "search"}).passed is True
+    def test_single_tool_found(self) -> None:
+        assert check_tools_called([_tool("search")], {"tools": ["search"]}).passed is True
 
-    def test_not_found(self) -> None:
-        assert check_tool_called([_tool("search")], {"name": "delete"}).passed is False
+    def test_single_tool_missing(self) -> None:
+        assert check_tools_called([_tool("search")], {"tools": ["delete"]}).passed is False
 
-    def test_empty_spans(self) -> None:
-        assert check_tool_called([], {"name": "search"}).passed is False
+    def test_all_present(self) -> None:
+        spans = [_tool("search", start=0), _tool("summarize", start=1)]
+        assert check_tools_called(spans, {"tools": ["search", "summarize"]}).passed is True
+
+    def test_one_missing(self) -> None:
+        spans = [_tool("search", start=0), _tool("summarize", start=1)]
+        r = check_tools_called(spans, {"tools": ["search", "delete"]})
+        assert r.passed is False
+        assert "delete" in r.detail
+
+    def test_multiple_missing_all_named(self) -> None:
+        spans = [_tool("search", start=0)]
+        r = check_tools_called(spans, {"tools": ["search", "alpha", "beta"]})
+        assert r.passed is False
+        assert "alpha" in r.detail
+        assert "beta" in r.detail
+
+    def test_order_does_not_matter(self) -> None:
+        """Set membership — any temporal order passes."""
+        spans = [_tool("b", start=0), _tool("a", start=1)]
+        assert check_tools_called(spans, {"tools": ["a", "b"]}).passed is True
+
+    def test_extra_tools_ignored(self) -> None:
+        """Tools beyond the expected set don't cause failure."""
+        spans = [_tool("a", start=0), _tool("x", start=1), _tool("b", start=2)]
+        assert check_tools_called(spans, {"tools": ["a", "b"]}).passed is True
+
+    def test_empty_spans_with_nonempty_expected(self) -> None:
+        assert check_tools_called([], {"tools": ["search"]}).passed is False
 
     def test_found_on_llm_span(self) -> None:
-        """OpenAI instrumentor records tools on LLM spans."""
         llm = _llm(None, tools=[ToolInfo(name="calc", args={})])
-        assert check_tool_called([llm], {"name": "calc"}).passed is True
+        assert check_tools_called([llm], {"tools": ["calc"]}).passed is True
 
     def test_parallel_tools_on_single_span(self) -> None:
         llm = _llm(
             None,
             tools=[ToolInfo(name="a", args={}), ToolInfo(name="b", args={})],
         )
-        assert check_tool_called([llm], {"name": "a"}).passed is True
-        assert check_tool_called([llm], {"name": "b"}).passed is True
-        assert check_tool_called([llm], {"name": "c"}).passed is False
+        assert check_tools_called([llm], {"tools": ["a", "b"]}).passed is True
+        assert check_tools_called([llm], {"tools": ["a", "c"]}).passed is False
 
     def test_case_sensitive(self) -> None:
-        """Tool names are case-sensitive."""
-        assert check_tool_called([_tool("Search")], {"name": "search"}).passed is False
-        assert check_tool_called([_tool("Search")], {"name": "Search"}).passed is True
+        assert check_tools_called([_tool("Search")], {"tools": ["search"]}).passed is False
+        assert check_tools_called([_tool("Search")], {"tools": ["Search"]}).passed is True
 
     def test_substring_no_match(self) -> None:
         """'search' should not match 'search_v2'."""
-        assert check_tool_called([_tool("search_v2")], {"name": "search"}).passed is False
+        assert check_tools_called([_tool("search_v2")], {"tools": ["search"]}).passed is False
 
     def test_tool_on_both_tool_and_llm_span(self) -> None:
-        """Same tool on TOOL span and LLM span — dedup, but still found."""
+        """Dedup doesn't cause false negatives."""
         tool = _tool("search", start=0)
         llm = _llm(None, start=1, tools=[ToolInfo(name="search", args={})])
-        assert check_tool_called([tool, llm], {"name": "search"}).passed is True
+        assert check_tools_called([tool, llm], {"tools": ["search"]}).passed is True
 
     def test_tool_span_without_tools_list_uses_span_name(self) -> None:
-        """TOOL span with no tools list — _collect_tool_names uses span.name."""
         span = Span(
             trace_id="t",
             span_id="s",
@@ -281,42 +304,54 @@ class TestToolCalled:
             end_time=T0 + timedelta(seconds=1),
             tools=[],
         )
-        assert check_tool_called([span], {"name": "get_weather"}).passed is True
+        assert check_tools_called([span], {"tools": ["get_weather"]}).passed is True
 
-    def test_empty_name_param(self) -> None:
-        assert check_tool_called([_tool("search")], {"name": ""}).passed is False
-        assert check_tool_called([_tool("search")], {}).passed is False
-
-    def test_detail_lists_found_tools(self) -> None:
-        r = check_tool_called([_tool("a"), _tool("b", start=1)], {"name": "c"})
+    def test_detail_lists_actual_tools_on_failure(self) -> None:
+        spans = [_tool("a"), _tool("b", start=1)]
+        r = check_tools_called(spans, {"tools": ["c"]})
         assert "a" in r.detail
         assert "b" in r.detail
+        assert "c" in r.detail
 
 
-class TestToolNotCalled:
-    """Check: tool_not_called — tool name must NOT appear in spans."""
+class TestToolsNotCalled:
+    """Check: tools_not_called — none of the named tools may appear in spans."""
 
-    def test_absent(self) -> None:
-        assert check_tool_not_called([_tool("search")], {"name": "delete"}).passed is True
+    def test_single_tool_absent(self) -> None:
+        assert check_tools_not_called([_tool("search")], {"tools": ["delete"]}).passed is True
 
-    def test_present(self) -> None:
-        assert check_tool_not_called([_tool("delete")], {"name": "delete"}).passed is False
+    def test_single_tool_present(self) -> None:
+        assert check_tools_not_called([_tool("delete")], {"tools": ["delete"]}).passed is False
+
+    def test_all_absent(self) -> None:
+        spans = [_tool("search", start=0), _tool("summarize", start=1)]
+        assert check_tools_not_called(spans, {"tools": ["delete", "drop"]}).passed is True
+
+    def test_one_present(self) -> None:
+        spans = [_tool("search", start=0), _tool("delete", start=1)]
+        r = check_tools_not_called(spans, {"tools": ["delete", "drop"]})
+        assert r.passed is False
+        assert "delete" in r.detail
+        assert "drop" not in r.detail
+
+    def test_multiple_present(self) -> None:
+        spans = [_tool("delete", start=0), _tool("drop", start=1)]
+        r = check_tools_not_called(spans, {"tools": ["delete", "drop"]})
+        assert r.passed is False
+        assert "delete" in r.detail
+        assert "drop" in r.detail
 
     def test_empty_spans(self) -> None:
-        assert check_tool_not_called([], {"name": "anything"}).passed is True
+        assert check_tools_not_called([], {"tools": ["anything"]}).passed is True
 
     def test_present_on_llm_span_only(self) -> None:
-        """Tool on LLM span (no TOOL span) — still counts as called."""
         llm = _llm(None, tools=[ToolInfo(name="danger", args={})])
-        assert check_tool_not_called([llm], {"name": "danger"}).passed is False
+        assert check_tools_not_called([llm], {"tools": ["danger"]}).passed is False
 
     def test_substring_no_false_positive(self) -> None:
         """'delete' should not match 'delete_draft'."""
-        assert check_tool_not_called([_tool("delete_draft")], {"name": "delete"}).passed is True
-
-    def test_detail_message(self) -> None:
-        r = check_tool_not_called([_tool("bad")], {"name": "bad"})
-        assert "unexpected" in r.detail
+        spans = [_tool("delete_draft")]
+        assert check_tools_not_called(spans, {"tools": ["delete"]}).passed is True
 
 
 class TestToolOrder:
@@ -329,10 +364,6 @@ class TestToolOrder:
     def test_wrong_order(self) -> None:
         spans = [_tool("b", start=0), _tool("a", start=1)]
         assert check_tool_order(spans, {"order": ["a", "b"]}).passed is False
-
-    def test_empty_expected(self) -> None:
-        """Empty expected order — vacuous pass."""
-        assert check_tool_order([_tool("a")], {"order": []}).passed is True
 
     def test_empty_spans(self) -> None:
         assert check_tool_order([], {"order": ["a"]}).passed is False
@@ -737,8 +768,8 @@ class TestCheckRegistry:
         checks = [
             {"type": "output_matches", "params": {"pattern": r"^P[123]$"}},
             {"type": "output_contains", "params": {"value": "P2"}},
-            {"type": "tool_called", "params": {"name": "classify"}},
-            {"type": "tool_not_called", "params": {"name": "delete"}},
+            {"type": "tools_called", "params": {"tools": ["classify"]}},
+            {"type": "tools_not_called", "params": {"tools": ["delete"]}},
             {"type": "max_cost", "params": {"max_usd": 0.01}},
             {"type": "max_turns", "params": {"max": 5}},
             {"type": "max_duration", "params": {"max_seconds": 10}},
@@ -768,7 +799,7 @@ class TestCheckRegistry:
         checks = [
             {"type": "output_contains", "params": {"value": "correct"}},
             {"type": "output_matches", "params": {"pattern": r"^right$"}},
-            {"type": "tool_called", "params": {"name": "expected_tool"}},
+            {"type": "tools_called", "params": {"tools": ["expected_tool"]}},
             {"type": "max_cost", "params": {"max_usd": 0.01}},
             {"type": "max_turns", "params": {"max": 0}},
             {"type": "max_duration", "params": {"max_seconds": 1}},

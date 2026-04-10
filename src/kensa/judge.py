@@ -28,6 +28,8 @@ from kensa.models import (
     Span,
     SpanKind,
     TraceSummary,
+    _is_bare_placeholder,
+    validate_runtime_list_params,
 )
 from kensa.paths import judge_prompt_path
 from kensa.utils import count_tool_calls, extract_output_text, get_tool_names
@@ -388,7 +390,7 @@ def _substitute_value(v: Any, row: dict[str, Any]) -> Any:
     types for check thresholds). An embedded placeholder coerces to ``str``.
     """
     if isinstance(v, str) and "{{" in v:
-        if v.startswith("{{") and v.endswith("}}") and v.count("{{") == 1:
+        if _is_bare_placeholder(v):
             field = v[2:-2]
             if field in row:
                 return row[field]
@@ -429,6 +431,11 @@ def judge_scenario(
         check_type = CheckType(check.type)
         check_fn = CHECK_REGISTRY[check_type]
         params = _substitute_params(check.params, dataset_row)
+        try:
+            validate_runtime_list_params(check_type, params)
+        except ValueError as e:
+            check_results.append(CheckResult(check=check_type.value, passed=False, detail=str(e)))
+            continue
         result = check_fn(spans, params)
         check_results.append(result)
 

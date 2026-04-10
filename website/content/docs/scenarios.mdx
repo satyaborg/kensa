@@ -77,8 +77,8 @@ input_field: query
 run_command: [python, agent.py]
 
 checks:
-  - type: tool_called
-    params: { name: search_flights }
+  - type: tools_called
+    params: { tools: [search_flights] }
   - type: max_turns
     params: { max: 5 }
 
