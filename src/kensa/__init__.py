@@ -4,7 +4,7 @@ from importlib.metadata import PackageNotFoundError, version
 
 try:
     __version__ = version("kensa")
-except PackageNotFoundError:
+except (PackageNotFoundError, TypeError):
     __version__ = "0.0.0"
 
 from kensa.exporter import instrument

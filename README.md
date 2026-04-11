@@ -107,6 +107,12 @@ input: "Our entire team can't log in. SSO has returned 502 since 7am."
 run_command: [python, agent.py]   # input is appended as the final argv element
 
 checks:
+  - type: trajectory
+    params:
+      steps:
+        - tool: classify_ticket
+      max_steps: 1
+      max_tokens: 2000
   - type: output_matches
     params: { pattern: "^P[123]$" }
 
@@ -115,6 +121,15 @@ criteria: |
 ```
 
 For complete examples, see [`examples/`](examples/).
+
+`trajectory` is the deterministic path check for tool-call correctness. V1 supports:
+
+- `ordering: exact | any_order`
+- `args: exact | ignore`
+- `min_accuracy`
+- inline budgets: `max_steps`, `max_tokens`, `max_duration_seconds`
+
+When present, reports surface `trajectory_accuracy` and `step_efficiency` alongside pass/fail.
 
 ## CI
 

@@ -32,6 +32,15 @@ def _aggregate_stats(results: list[Result]) -> str:
     return " · ".join(parts)
 
 
+def _format_metrics(metrics: dict[str, float]) -> str:
+    parts: list[str] = []
+    if "trajectory_accuracy" in metrics:
+        parts.append(f"traj {metrics['trajectory_accuracy']:.2f}")
+    if "step_efficiency" in metrics:
+        parts.append(f"eff {metrics['step_efficiency']:.2f}")
+    return " · ".join(parts) if parts else "-"
+
+
 def format_terminal(results: list[Result], verbose: bool = False) -> str:
     """Format results for terminal output using Rich markup."""
     try:
@@ -63,9 +72,18 @@ def format_terminal(results: list[Result], verbose: bool = False) -> str:
                     )
                 if r.expected is not None:
                     console.print(f"  [dim]expected: {r.expected}[/dim]", highlight=False)
+                if r.metrics:
+                    console.print(
+                        f"  [dim]metrics: {_format_metrics(r.metrics)}[/dim]", highlight=False
+                    )
                 for c in r.check_results:
                     tag = "[green]pass[/green]" if c.passed else "[red]fail[/red]"
                     console.print(f"  {tag}  {c.check}: {c.detail}", highlight=False)
+                    if c.scores:
+                        score_parts = ", ".join(
+                            f"{name}={value:.3f}" for name, value in sorted(c.scores.items())
+                        )
+                        console.print(f"        [dim]{score_parts}[/dim]", highlight=False)
                 if r.judge_result:
                     if r.judge_result.verdict == ResultStatus.UNCERTAIN:
                         tag = "[blue]uncertain[/blue]"
@@ -97,8 +115,8 @@ def format_markdown(results: list[Result]) -> str:
         header += f", {uncertain} uncertain"
     lines.append(f"{header}\n")
 
-    lines.append("| Scenario | Status | Checks | Judge | Details |")
-    lines.append("|----------|--------|--------|-------|---------|")
+    lines.append("| Scenario | Status | Checks | Judge | Metrics | Details |")
+    lines.append("|----------|--------|--------|-------|---------|---------|")
 
     for r in results:
         status_label = r.status.value
@@ -126,7 +144,10 @@ def format_markdown(results: list[Result]) -> str:
         if not detail and r.error:
             detail = r.error[:100]
 
-        lines.append(f"| {r.scenario_id} | {status_label} | {checks} | {judge} | {detail} |")
+        metrics = _format_metrics(r.metrics)
+        lines.append(
+            f"| {r.scenario_id} | {status_label} | {checks} | {judge} | {metrics} | {detail} |"
+        )
 
     failures = [r for r in results if r.status != ResultStatus.PASS]
     if failures:
@@ -136,6 +157,8 @@ def format_markdown(results: list[Result]) -> str:
             if r.expected is not None:
                 lines.append(f"- **Expected**: {r.expected}")
             lines.extend(f"- **{c.check}**: {c.detail}" for c in r.check_results if not c.passed)
+            if r.metrics:
+                lines.append(f"- **Metrics**: {_format_metrics(r.metrics)}")
             if r.judge_result and not r.judge_result.passed:
                 lines.append(f"- **Judge**: {r.judge_result.reasoning}")
             if r.error:
@@ -191,7 +214,7 @@ def format_html(results: list[Result]) -> str:
             display_ids.append(r.scenario_id)
 
     rows = ""
-    col_count = 7
+    col_count = 8
     for i, r in enumerate(results):
         esc_id = html.escape(display_ids[i])
         status_class = r.status.value
@@ -208,6 +231,7 @@ def format_html(results: list[Result]) -> str:
                 judge_str = r.judge_result.verdict.value
             else:
                 judge_str = "pass" if r.judge_result.passed else "fail"
+        metrics_str = _format_metrics(r.metrics)
 
         cost_str = "-"
         dur_str = "-"
@@ -242,6 +266,7 @@ def format_html(results: list[Result]) -> str:
             f'<td><span class="badge {status_class}">{status_label}</span></td>'
             f"<td>{checks_str}</td>"
             f"<td>{judge_str}</td>"
+            f"<td>{html.escape(metrics_str)}</td>"
             f'<td class="num">{cost_str}</td>'
             f'<td class="num">{dur_str}</td>'
             f"{detail_td}"
@@ -279,11 +304,33 @@ def format_html(results: list[Result]) -> str:
                 )
                 for c in r.check_results:
                     dot = "dot-pass" if c.passed else "dot-fail"
+                    check_detail = c.detail
+                    if c.scores:
+                        score_parts = ", ".join(
+                            f"{name}={value:.3f}" for name, value in sorted(c.scores.items())
+                        )
+                        check_detail = f"{check_detail} [{score_parts}]"
                     panel += (
                         f'<tr><td><span class="{dot}"></span></td>'
                         f'<td class="check-name">'
                         f"{html.escape(c.check)}</td>"
-                        f"<td>{html.escape(c.detail)}</td></tr>"
+                        f"<td>{html.escape(check_detail)}</td></tr>"
+                    )
+                panel += "</table></div>"
+
+            if r.metrics:
+                panel += (
+                    '<div class="panel-section">'
+                    '<div class="panel-label">Metrics</div>'
+                    '<table class="checks-table">'
+                )
+                for name, value in sorted(r.metrics.items()):
+                    panel += (
+                        "<tr>"
+                        '<td class="check-name">'
+                        f"{html.escape(name)}</td>"
+                        f"<td>{value:.3f}</td>"
+                        "</tr>"
                     )
                 panel += "</table></div>"
 
@@ -630,7 +677,7 @@ margin-top:32px;text-align:center}
             "<table>",
             "<thead><tr>"
             "<th>Scenario</th><th>Status</th>"
-            "<th>Checks</th><th>Judge</th>"
+            "<th>Checks</th><th>Judge</th><th>Metrics</th>"
             '<th style="text-align:right">Cost</th>'
             '<th style="text-align:right">Duration</th>'
             "<th>Details</th>"

@@ -29,7 +29,7 @@ from kensa.models import (
     SpanKind,
     TraceSummary,
     _is_bare_placeholder,
-    validate_runtime_list_params,
+    validate_runtime_check_params,
 )
 from kensa.paths import judge_prompt_path
 from kensa.utils import count_tool_calls, extract_output_text, get_tool_names
@@ -414,6 +414,13 @@ def _substitute_params(
     return {k: _substitute_value(v, row) for k, v in params.items()}
 
 
+def _extract_metrics(check_results: list[CheckResult]) -> dict[str, float]:
+    metrics: dict[str, float] = {}
+    for check_result in check_results:
+        metrics.update(check_result.scores)
+    return metrics
+
+
 def judge_scenario(
     scenario: Scenario,
     spans: list[Span],
@@ -432,7 +439,7 @@ def judge_scenario(
         check_fn = CHECK_REGISTRY[check_type]
         params = _substitute_params(check.params, dataset_row)
         try:
-            validate_runtime_list_params(check_type, params)
+            validate_runtime_check_params(check_type, params)
         except ValueError as e:
             check_results.append(CheckResult(check=check_type.value, passed=False, detail=str(e)))
             continue
@@ -440,6 +447,7 @@ def judge_scenario(
         check_results.append(result)
 
     trace_summary = _build_trace_summary(spans, trace_path)
+    metrics = _extract_metrics(check_results)
 
     if any(not cr.passed for cr in check_results):
         return Result(
@@ -450,6 +458,7 @@ def judge_scenario(
             check_results=check_results,
             judge_result=None,
             trace=trace_summary,
+            metrics=metrics,
         )
 
     judge_result = None
@@ -473,6 +482,7 @@ def judge_scenario(
                 check_results=check_results,
                 judge_result=None,
                 trace=trace_summary,
+                metrics=metrics,
                 error=f"Judge error: {e}",
             )
 
@@ -491,6 +501,7 @@ def judge_scenario(
         check_results=check_results,
         judge_result=judge_result,
         trace=trace_summary,
+        metrics=metrics,
     )
 
 

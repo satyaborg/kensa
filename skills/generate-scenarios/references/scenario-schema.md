@@ -46,10 +46,17 @@ failure_pattern: string            # failure pattern this targets (Mode B)
 | `tools_called` | `tools: [string]` | All listed tools were called (set membership, order-free) |
 | `tools_not_called` | `tools: [string]` | None of the listed tools were called |
 | `tool_order` | `order: [string]` | Tools called in this temporal sequence (opt-in; use only when order is load-bearing, like setup -> migrate -> test. Default to `tools_called` for presence intent; prefer grading outcomes over constraining incidental execution paths.) |
+| `trajectory` | `steps: [{tool: string, args?: object}]`, `ordering: exact \| any_order` (default: exact), `args: exact \| ignore` (default: exact), `min_accuracy: float` (default: 1.0), `max_steps: int?`, `max_tokens: int?`, `max_duration_seconds: float?` | Canonical tool-call trajectory match with numeric `trajectory_accuracy` and `step_efficiency` metrics plus machine-readable mismatch diagnostics |
 | `max_cost` | `max: float` | Total cost under threshold (USD) |
 | `max_turns` | `max: int` | LLM call count under N |
 | `max_duration` | `max_seconds: float` | Elapsed time under threshold |
 | `no_repeat_calls` | (none) | No duplicate tool calls (same name + args) |
+
+Notes:
+
+- `trajectory` is limited to one check per scenario in V1.
+- `trajectory` currently evaluates tool-call paths only.
+- `max_tokens` is warning-only when token data is unavailable in the trace.
 
 ## Good Scenario Example
 
@@ -62,6 +69,14 @@ input: "What's the weather in Tokyo?"
 run_command: [uv, run, python, agent.py]
 expected_outcome: Agent calls get_weather tool and returns temperature for Tokyo
 checks:
+  - type: trajectory
+    params:
+      steps:
+        - tool: get_weather
+          args: { city: Tokyo }
+      max_steps: 1
+      max_tokens: 2000
+    description: Must take the expected tool path efficiently
   - type: tools_called
     params: { tools: [get_weather] }
     description: Must use the weather tool
