@@ -168,9 +168,26 @@ def validate_runtime_list_params(check_type: CheckType, params: dict[str, Any]) 
         raise ValueError(f"{check_name}: '{key}' must contain only strings, got: {bad}")
 
 
+def _has_placeholder_values(params: dict[str, Any]) -> bool:
+    """Check if any param value (or nested list/dict leaf) is a bare placeholder."""
+    for value in params.values():
+        if isinstance(value, str) and _is_bare_placeholder(value):
+            return True
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and _is_bare_placeholder(item):
+                    return True
+                if isinstance(item, dict) and _has_placeholder_values(item):
+                    return True
+        if isinstance(value, dict) and _has_placeholder_values(value):
+            return True
+    return False
+
+
 def validate_runtime_check_params(check_type: CheckType, params: dict[str, Any]) -> None:
     if check_type == CheckType.TRAJECTORY:
-        TrajectoryParams.model_validate(params)
+        if not _has_placeholder_values(params):
+            TrajectoryParams.model_validate(params)
         return
     validate_runtime_list_params(check_type, params)
 

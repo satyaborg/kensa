@@ -310,6 +310,21 @@ class TestCheckParamValidation:
                 params={"steps": [{"tool": "search_docs"}], "min_accuracy": 1.5},
             )
 
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"steps": "{{expected_steps}}", "ordering": "any_order"},
+            {"steps": [{"tool": "search_docs"}], "max_steps": "{{budget}}"},
+            {"steps": [{"tool": "search_docs"}], "ordering": "{{ordering}}"},
+        ],
+    )
+    def test_trajectory_placeholder_defers_validation(
+        self, params: dict[str, object]
+    ) -> None:
+        """Trajectory checks with dataset placeholders must not fail at parse time."""
+        check = Check(type=CheckType.TRAJECTORY, params=params)
+        assert check.type == CheckType.TRAJECTORY
+
 
 class TestResultSerialization:
     def test_pass_result(self) -> None:

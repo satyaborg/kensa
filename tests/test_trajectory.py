@@ -177,6 +177,31 @@ class TestTrajectoryAnyOrder:
         assert result.passed is False
         assert result.diagnostics["argument_mismatches"][0]["actual_args"] == {"query": "b"}
 
+    def test_any_order_exact_prefers_exact_match_over_greedy_same_tool(self) -> None:
+        """Regression: greedy same-tool fallback must not steal an actual step
+        that would exactly match a later expected step."""
+        spans = [
+            _tool("search_docs", {"query": "y"}, start=0),
+            _tool("search_docs", {"query": "z"}, start=1),
+        ]
+        result = check_trajectory(
+            spans,
+            {
+                "steps": [
+                    {"tool": "search_docs", "args": {"query": "x"}},
+                    {"tool": "search_docs", "args": {"query": "y"}},
+                ],
+                "ordering": "any_order",
+                "args": "exact",
+            },
+        )
+        # expected[1]=y should exact-match actual[0]=y; expected[0]=x falls back to actual[1]=z
+        assert result.scores["trajectory_accuracy"] > 0.0
+        assert len(result.diagnostics["argument_mismatches"]) == 1
+        assert result.diagnostics["argument_mismatches"][0]["expected_args"] == {"query": "x"}
+        assert result.diagnostics["argument_mismatches"][0]["actual_args"] == {"query": "z"}
+        assert result.diagnostics["missing_steps"] == []
+
 
 class TestTrajectoryBudgets:
     def test_max_steps_budget_violation_fails(self) -> None:

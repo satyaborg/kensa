@@ -168,12 +168,18 @@ def _match_any_order(
     argument_mismatches: list[dict[str, Any]] = []
     actual_indexes = list(range(len(actual_steps)))
 
+    # Pass 1: exact matches only — prevents greedy same-tool consumption
+    # from stealing actuals that would exactly match a later expected step.
+    unmatched_expected: list[tuple[int, TrajectoryStep]] = []
     for expected_index, expected in enumerate(expected_steps):
         matched = _pop_first_match(expected, actual_steps, actual_indexes, args_mode)
         if matched is not None:
             matched_steps += 1
-            continue
+        else:
+            unmatched_expected.append((expected_index, expected))
 
+    # Pass 2: same-tool fallback for remaining unmatched expected steps.
+    for expected_index, expected in unmatched_expected:
         if args_mode == TrajectoryArgsMode.EXACT:
             mismatched = _pop_first_same_tool(expected, actual_steps, actual_indexes)
             if mismatched is not None:
