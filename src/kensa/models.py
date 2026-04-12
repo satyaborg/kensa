@@ -186,8 +186,11 @@ def _has_placeholder_values(params: dict[str, Any]) -> bool:
 
 def validate_runtime_check_params(check_type: CheckType, params: dict[str, Any]) -> None:
     if check_type == CheckType.TRAJECTORY:
-        if not _has_placeholder_values(params):
-            TrajectoryParams.model_validate(params)
+        if _has_placeholder_values(params):
+            raise ValueError(
+                "trajectory: unresolved dataset placeholders remain after substitution"
+            )
+        TrajectoryParams.model_validate(params)
         return
     validate_runtime_list_params(check_type, params)
 
@@ -201,6 +204,8 @@ class Check(BaseModel):
 
     @model_validator(mode="after")
     def _validate_params(self) -> Check:
+        if self.type == CheckType.TRAJECTORY and _has_placeholder_values(self.params):
+            return self
         key = _LIST_PARAM_CHECKS.get(self.type)
         if key is not None:
             value = self.params.get(key)

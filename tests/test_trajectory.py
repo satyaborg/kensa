@@ -252,7 +252,35 @@ class TestTrajectoryBudgets:
         assert result.diagnostics["budget_warnings"] == [
             {
                 "budget": "max_tokens",
-                "message": "No token data available — budget not enforced.",
+                "message": "No LLM spans — token budget not applicable.",
+            }
+        ]
+
+    def test_partial_token_data_emits_warning_not_partial_enforcement(self) -> None:
+        spans = [
+            _llm(
+                start=0,
+                tokens=TokenCounts(prompt=40, completion=30, total=70),
+                tools=[ToolInfo(name="search_docs", args={})],
+            ),
+            _llm(
+                start=1,
+                tools=[ToolInfo(name="open_url", args={})],
+            ),
+        ]
+        result = check_trajectory(
+            spans,
+            {
+                "steps": [{"tool": "search_docs"}, {"tool": "open_url"}],
+                "max_tokens": 50,
+            },
+        )
+        assert result.passed is True
+        assert result.diagnostics["budget_violations"] == []
+        assert result.diagnostics["budget_warnings"] == [
+            {
+                "budget": "max_tokens",
+                "message": "Incomplete token data — budget not enforced.",
             }
         ]
 

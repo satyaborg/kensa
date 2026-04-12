@@ -8,6 +8,7 @@ from typing import Any
 from kensa.models import (
     CheckResult,
     Span,
+    SpanKind,
     ToolInfo,
     TrajectoryArgsMode,
     TrajectoryOrderingMode,
@@ -46,9 +47,13 @@ def _collect_actual_steps(spans: list[Span]) -> list[TrajectoryStep]:
 
 
 def _total_tokens(spans: list[Span]) -> tuple[int, bool]:
-    token_spans = [span for span in spans if span.tokens]
-    total = sum(span.tokens.total for span in token_spans if span.tokens is not None)
-    return total, bool(token_spans)
+    llm_spans = [span for span in spans if span.kind == SpanKind.LLM]
+    if not llm_spans:
+        return 0, False
+    if any(span.tokens is None for span in llm_spans):
+        return 0, False
+    total = sum(span.tokens.total for span in llm_spans if span.tokens is not None)
+    return total, True
 
 
 def _duration_seconds(spans: list[Span]) -> float:
@@ -236,12 +241,13 @@ def _budget_violations(
 
     if params.max_tokens is not None:
         if not has_tokens:
-            warnings.append(
-                {
-                    "budget": "max_tokens",
-                    "message": "No token data available — budget not enforced.",
-                }
+            has_llm_spans = any(span.kind == SpanKind.LLM for span in spans)
+            msg = (
+                "Incomplete token data — budget not enforced."
+                if has_llm_spans
+                else "No LLM spans — token budget not applicable."
             )
+            warnings.append({"budget": "max_tokens", "message": msg})
         elif total_tokens > params.max_tokens:
             violations.append(
                 {"budget": "max_tokens", "limit": params.max_tokens, "actual": total_tokens}

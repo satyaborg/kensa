@@ -1155,3 +1155,34 @@ class TestJudgeScenarioTrajectoryMetrics:
         assert mock.call_count == 0
         assert result.metrics["trajectory_accuracy"] == 0.0
         assert result.check_results[0].diagnostics["missing_steps"][0]["tool"] == "search_docs"
+
+    def test_unresolved_trajectory_placeholder_fails_check_not_judge_run(
+        self,
+        sample_spans: list[Span],
+    ) -> None:
+        from kensa.models import Check, CheckType
+
+        scenario = Scenario(
+            id="traj_placeholder",
+            name="Trajectory placeholder",
+            run_command=["python", "agent.py"],
+            checks=[
+                Check(
+                    type=CheckType.TRAJECTORY,
+                    params={"steps": "{{expected_steps}}"},
+                )
+            ],
+            criteria="This should never run because the deterministic check fails.",
+        )
+        mock = MockJudge()
+        result = judge_scenario(
+            scenario,
+            sample_spans,
+            "traces/t.jsonl",
+            mock,
+            dataset_row={"ticket": "SSO down"},
+        )
+        assert result.status == ResultStatus.FAIL
+        assert mock.call_count == 0
+        assert result.check_results[0].check == "trajectory"
+        assert "unresolved dataset placeholders remain" in result.check_results[0].detail
