@@ -17,6 +17,7 @@ from kensa.models import (
 # "neither reliably passing nor reliably failing" band.
 _HIGH_VARIANCE_LOW = 0.2
 _HIGH_VARIANCE_HIGH = 0.8
+_PASS_POW_K_VALUES = (3, 5)
 
 
 def compute_variance_stats(values: list[float]) -> VarianceStats:
@@ -38,6 +39,14 @@ def compute_variance_stats(values: list[float]) -> VarianceStats:
     )
 
 
+def compute_estimated_pass_rate_pow_k(
+    pass_rate: float,
+    ks: tuple[int, ...] = _PASS_POW_K_VALUES,
+) -> dict[str, float]:
+    """Estimate k-run pass rate from single-run pass rate under independence."""
+    return {str(k): round(pass_rate**k, 6) for k in ks}
+
+
 def aggregate_results(scenario_id: str, results: list[Result]) -> AggregatedResult:
     """Aggregate per-run Results into a single AggregatedResult."""
     num_runs = len(results)
@@ -51,6 +60,7 @@ def aggregate_results(scenario_id: str, results: list[Result]) -> AggregatedResu
         status_counts[key] = status_counts.get(key, 0) + 1
     pass_count = status_counts.get(ResultStatus.PASS.value, 0)
     pass_rate = pass_count / num_runs
+    estimated_pass_rate_pow_k = compute_estimated_pass_rate_pow_k(pass_rate)
 
     # Cost + duration variance
     costs = [r.trace.cost_usd for r in results if r.trace]
@@ -85,6 +95,7 @@ def aggregate_results(scenario_id: str, results: list[Result]) -> AggregatedResu
         scenario_id=scenario_id,
         num_runs=num_runs,
         pass_rate=round(pass_rate, 4),
+        estimated_pass_rate_pow_k=estimated_pass_rate_pow_k,
         status_counts=status_counts,
         cost=cost_stats,
         duration=duration_stats,
@@ -127,6 +138,8 @@ def format_aggregate_terminal(results: list[AggregatedResult], verbose: bool = F
     table = Table(show_header=True, header_style="bold")
     table.add_column("Scenario", style="dim")
     table.add_column("Pass Rate")
+    table.add_column("Est Pass^3")
+    table.add_column("Est Pass^5")
     table.add_column("Runs")
     table.add_column("Cost (mean±std)")
     table.add_column("Duration (mean±std)")
@@ -140,12 +153,23 @@ def format_aggregate_terminal(results: list[AggregatedResult], verbose: bool = F
             pr_str = f"[red]{r.pass_rate:.0%}[/red]"
         else:
             pr_str = f"[yellow]{r.pass_rate:.0%}[/yellow]"
+        pass3_str = f"{r.estimated_pass_rate_pow_k.get('3', 0.0):.0%}"
+        pass5_str = f"{r.estimated_pass_rate_pow_k.get('5', 0.0):.0%}"
 
         cost_str = f"${r.cost.mean:.4f}±{r.cost.stddev:.4f}"
         dur_str = f"{r.duration.mean:.1f}s±{r.duration.stddev:.1f}s"
         flags = "FLAKY" if r.high_variance else ""
 
-        table.add_row(r.scenario_id, pr_str, str(r.num_runs), cost_str, dur_str, flags)
+        table.add_row(
+            r.scenario_id,
+            pr_str,
+            pass3_str,
+            pass5_str,
+            str(r.num_runs),
+            cost_str,
+            dur_str,
+            flags,
+        )
 
     console.print(table)
 

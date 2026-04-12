@@ -377,6 +377,7 @@ class AggregatedResult(BaseModel):
     scenario_id: str
     num_runs: int = 1
     pass_rate: float = 0.0
+    estimated_pass_rate_pow_k: dict[str, float] = Field(default_factory=dict)
     status_counts: dict[str, int] = Field(default_factory=dict)
     cost: VarianceStats = Field(default_factory=VarianceStats)
     duration: VarianceStats = Field(default_factory=VarianceStats)

@@ -57,6 +57,7 @@ Notes:
 - `trajectory` is limited to one check per scenario in V1.
 - `trajectory` currently evaluates tool-call paths only.
 - `max_tokens` is warning-only when token data is unavailable in the trace.
+- For custom deterministic assertions, prefer Python checks registered in code over YAML-embedded logic.
 
 ## Good Scenario Example
 

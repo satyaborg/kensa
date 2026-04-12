@@ -131,6 +131,12 @@ For complete examples, see [`examples/`](examples/).
 
 When present, reports surface `trajectory_accuracy` and `step_efficiency` alongside pass/fail.
 
+When you run the same scenario multiple times, aggregate reports also surface estimated 3-run
+and 5-run pass rates assuming independent runs.
+
+If you need custom deterministic assertions beyond the built-ins, add a Python check via
+`CHECK_REGISTRY` rather than embedding logic in scenario YAML.
+
 ## CI
 
 ```yaml

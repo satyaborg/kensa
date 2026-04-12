@@ -228,7 +228,6 @@ class TestOutputMatches:
         assert check_output_matches([early, late], {"pattern": r"^PASS$"}).passed is True
         assert check_output_matches([early, late], {"pattern": r"^FAIL$"}).passed is False
 
-
 class TestToolsCalled:
     """Check: tools_called — all named tools must appear in spans (set membership)."""
 
