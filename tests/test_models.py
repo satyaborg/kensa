@@ -318,9 +318,7 @@ class TestCheckParamValidation:
             {"steps": [{"tool": "search_docs"}], "ordering": "{{ordering}}"},
         ],
     )
-    def test_trajectory_placeholder_defers_validation(
-        self, params: dict[str, object]
-    ) -> None:
+    def test_trajectory_placeholder_defers_validation(self, params: dict[str, object]) -> None:
         """Trajectory checks with dataset placeholders must not fail at parse time."""
         check = Check(type=CheckType.TRAJECTORY, params=params)
         assert check.type == CheckType.TRAJECTORY
