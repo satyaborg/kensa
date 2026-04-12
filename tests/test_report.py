@@ -23,6 +23,7 @@ def _make_results() -> list[Result]:
                 CheckResult(check="output_contains", passed=True, detail="Found: 'hello'"),
             ],
             judge_result=JudgeResult(passed=True, reasoning="Correct output"),
+            metrics={"trajectory_accuracy": 1.0, "step_efficiency": 1.0},
             trace=TraceSummary(
                 path="traces/pass.jsonl",
                 llm_calls=2,
@@ -38,6 +39,7 @@ def _make_results() -> list[Result]:
             check_results=[
                 CheckResult(check="tools_called", passed=False, detail="Missing tools: ['search']"),
             ],
+            metrics={"trajectory_accuracy": 0.5, "step_efficiency": 0.5},
             trace=TraceSummary(
                 path="traces/fail.jsonl",
                 llm_calls=5,
@@ -65,6 +67,11 @@ class TestTerminalFormat:
         output = format_terminal([])
         assert "0/0" in output
 
+    def test_metrics_render_in_table(self) -> None:
+        output = format_terminal(_make_results())
+        assert "traj 1.00" in output
+        assert "eff 0.50" in output
+
 
 class TestMarkdownFormat:
     def test_contains_table(self) -> None:
@@ -77,6 +84,11 @@ class TestMarkdownFormat:
         output = format_markdown(_make_results())
         assert "### Failures" in output
         assert "tools_called" in output
+
+    def test_metrics_column_present(self) -> None:
+        output = format_markdown(_make_results())
+        assert "| Scenario | Status | Checks | Judge | Metrics | Details |" in output
+        assert "traj 0.50" in output
 
     def test_pass_only(self) -> None:
         results = [_make_results()[0]]
@@ -100,6 +112,7 @@ class TestJsonFormat:
         restored = [Result.model_validate(r) for r in data]
         assert len(restored) == len(results)
         assert restored[0].status == results[0].status
+        assert restored[0].metrics["trajectory_accuracy"] == 1.0
 
 
 class TestTerminalEdgeCases:
@@ -275,3 +288,8 @@ class TestExpectedInHtml:
         output = format_html([r])
         assert "&lt;b&gt;xss&lt;/b&gt;" in output
         assert "<b>xss</b>" not in output
+
+    def test_html_renders_metrics(self) -> None:
+        output = format_html(_make_results())
+        assert ">Metrics<" in output
+        assert "trajectory_accuracy" in output

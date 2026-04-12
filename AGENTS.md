@@ -62,9 +62,10 @@ models.py          ← foundation (pydantic only, dependency root)
 paths.py           ← stdlib only (centralized .kensa/ path resolution)
 pricing.py         ← models only (model price lookup, OpenRouter fetch)
 trace_semantics.py ← models only (canonical tool-call dedup/ordering)
+trajectory.py      ← models + trace_semantics
 utils.py           ← models + trace_semantics
 translate.py       ← models + pricing
-checks.py          ← models + trace_semantics + utils
+checks.py          ← models + trace_semantics + utils + trajectory
 report.py          ← models only
 styles.py          ← models only
 aggregate.py       ← models only (multi-run variance/flaky detection)

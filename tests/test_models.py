@@ -9,6 +9,7 @@ import pytest
 from kensa.models import (
     Analysis,
     Check,
+    CheckResult,
     CheckType,
     Distribution,
     FlaggedTrace,
@@ -24,6 +25,9 @@ from kensa.models import (
     Span,
     SpanKind,
     TraceSummary,
+    TrajectoryArgsMode,
+    TrajectoryOrderingMode,
+    TrajectoryParams,
 )
 
 
@@ -89,6 +93,7 @@ class TestScenarioSerialization:
             CheckType.TOOLS_CALLED: {"tools": ["t"]},
             CheckType.TOOLS_NOT_CALLED: {"tools": ["t"]},
             CheckType.TOOL_ORDER: {"order": ["t"]},
+            CheckType.TRAJECTORY: {"steps": [{"tool": "search_docs"}]},
         }
         for ct in CheckType:
             params = valid_params.get(ct, {"test": True})
@@ -273,6 +278,51 @@ class TestCheckParamValidation:
         check = Check(type=CheckType.OUTPUT_CONTAINS, params={"value": "hello"})
         assert check.type == CheckType.OUTPUT_CONTAINS
 
+    def test_trajectory_params_valid(self) -> None:
+        check = Check(
+            type=CheckType.TRAJECTORY,
+            params={
+                "steps": [{"tool": "search_docs", "args": {"query": "refund policy"}}],
+                "ordering": "any_order",
+                "args": "ignore",
+                "min_accuracy": 0.5,
+                "max_steps": 3,
+                "max_tokens": 1000,
+                "max_duration_seconds": 5,
+            },
+        )
+        params = TrajectoryParams.model_validate(check.params)
+        assert params.ordering == TrajectoryOrderingMode.ANY_ORDER
+        assert params.args == TrajectoryArgsMode.IGNORE
+
+    def test_trajectory_requires_steps(self) -> None:
+        with pytest.raises(ValueError, match=r"steps"):
+            Check(type=CheckType.TRAJECTORY, params={})
+
+    def test_trajectory_steps_must_not_be_empty(self) -> None:
+        with pytest.raises(ValueError, match="must not be empty"):
+            Check(type=CheckType.TRAJECTORY, params={"steps": []})
+
+    def test_trajectory_min_accuracy_bounds(self) -> None:
+        with pytest.raises(ValueError, match=r"between 0\.0 and 1\.0"):
+            Check(
+                type=CheckType.TRAJECTORY,
+                params={"steps": [{"tool": "search_docs"}], "min_accuracy": 1.5},
+            )
+
+    @pytest.mark.parametrize(
+        "params",
+        [
+            {"steps": "{{expected_steps}}", "ordering": "any_order"},
+            {"steps": [{"tool": "search_docs"}], "max_steps": "{{budget}}"},
+            {"steps": [{"tool": "search_docs"}], "ordering": "{{ordering}}"},
+        ],
+    )
+    def test_trajectory_placeholder_defers_validation(self, params: dict[str, object]) -> None:
+        """Trajectory checks with dataset placeholders must not fail at parse time."""
+        check = Check(type=CheckType.TRAJECTORY, params=params)
+        assert check.type == CheckType.TRAJECTORY
+
 
 class TestResultSerialization:
     def test_pass_result(self) -> None:
@@ -293,6 +343,27 @@ class TestResultSerialization:
         assert restored.status == ResultStatus.PASS
         assert restored.trace is not None
         assert restored.trace.cost_usd == 0.005
+
+    def test_result_metrics_round_trip(self) -> None:
+        result = Result(
+            scenario_id="trajectory_test",
+            status=ResultStatus.FAIL,
+            check_results=[
+                CheckResult(
+                    check="trajectory",
+                    passed=False,
+                    detail="mismatch",
+                    scores={"trajectory_accuracy": 0.5, "step_efficiency": 0.5},
+                    diagnostics={
+                        "missing_steps": [{"index": 0, "tool": "search_docs", "args": {}}]
+                    },
+                )
+            ],
+            metrics={"trajectory_accuracy": 0.5, "step_efficiency": 0.5},
+        )
+        restored = Result.model_validate(result.model_dump(mode="json"))
+        assert restored.metrics["trajectory_accuracy"] == 0.5
+        assert restored.check_results[0].diagnostics["missing_steps"][0]["tool"] == "search_docs"
 
     def test_fail_result_with_error(self) -> None:
         result = Result(
@@ -405,6 +476,18 @@ class TestScenarioJudgeValidation:
                 run_command=["echo", "test"],
                 criteria="Be accurate",
                 judge="tone-match",
+            )
+
+    def test_multiple_trajectory_checks_raise(self) -> None:
+        with pytest.raises(ValueError, match="at most one 'trajectory' check"):
+            Scenario(
+                id="bad_traj",
+                name="Bad trajectory",
+                run_command=["echo", "test"],
+                checks=[
+                    Check(type=CheckType.TRAJECTORY, params={"steps": [{"tool": "search"}]}),
+                    Check(type=CheckType.TRAJECTORY, params={"steps": [{"tool": "fetch"}]}),
+                ],
             )
 
 

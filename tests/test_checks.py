@@ -754,7 +754,7 @@ class TestCheckRegistry:
             assert check_type in CHECK_REGISTRY, f"{check_type} not in registry"
 
     def test_registry_count(self) -> None:
-        assert len(CHECK_REGISTRY) == 9
+        assert len(CHECK_REGISTRY) == 10
 
     def test_run_checks_multiple(self) -> None:
         response = json.dumps({"content": [{"type": "text", "text": "P2"}]})
@@ -770,13 +770,21 @@ class TestCheckRegistry:
             {"type": "output_contains", "params": {"value": "P2"}},
             {"type": "tools_called", "params": {"tools": ["classify"]}},
             {"type": "tools_not_called", "params": {"tools": ["delete"]}},
+            {
+                "type": "trajectory",
+                "params": {
+                    "steps": [{"tool": "classify", "args": {}}],
+                    "ordering": "exact",
+                    "args": "exact",
+                },
+            },
             {"type": "max_cost", "params": {"max_usd": 0.01}},
             {"type": "max_turns", "params": {"max": 5}},
             {"type": "max_duration", "params": {"max_seconds": 10}},
             {"type": "no_repeat_calls", "params": {}},
         ]
         results = run_checks(spans, checks)
-        assert len(results) == 8
+        assert len(results) == 9
         for r in results:
             assert r.passed is True, f"{r.check} failed: {r.detail}"
 

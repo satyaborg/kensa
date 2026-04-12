@@ -11,6 +11,7 @@ from typing import Any
 
 from kensa.models import CheckResult, CheckType, Span, SpanKind
 from kensa.trace_semantics import repeated_tool_names
+from kensa.trajectory import check_trajectory
 from kensa.utils import get_agent_output, get_tool_names, get_tool_names_ordered
 
 
@@ -163,6 +164,7 @@ CHECK_REGISTRY: dict[CheckType, CheckFn] = {
     CheckType.TOOLS_CALLED: check_tools_called,
     CheckType.TOOLS_NOT_CALLED: check_tools_not_called,
     CheckType.TOOL_ORDER: check_tool_order,
+    CheckType.TRAJECTORY: check_trajectory,
     CheckType.MAX_COST: check_max_cost,
     CheckType.MAX_TURNS: check_max_turns,
     CheckType.MAX_DURATION: check_max_duration,

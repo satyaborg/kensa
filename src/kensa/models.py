@@ -24,6 +24,7 @@ class CheckType(str, enum.Enum):
     TOOLS_CALLED = "tools_called"
     TOOLS_NOT_CALLED = "tools_not_called"
     TOOL_ORDER = "tool_order"
+    TRAJECTORY = "trajectory"
     MAX_COST = "max_cost"
     MAX_TURNS = "max_turns"
     MAX_DURATION = "max_duration"
@@ -68,6 +69,39 @@ class ToolInfo(BaseModel):
     name: str
     args: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any] | None = None
+
+
+class TrajectoryOrderingMode(str, enum.Enum):
+    EXACT = "exact"
+    ANY_ORDER = "any_order"
+
+
+class TrajectoryArgsMode(str, enum.Enum):
+    EXACT = "exact"
+    IGNORE = "ignore"
+
+
+class TrajectoryStep(BaseModel):
+    tool: str
+    args: dict[str, Any] = Field(default_factory=dict)
+
+
+class TrajectoryParams(BaseModel):
+    steps: list[TrajectoryStep]
+    ordering: TrajectoryOrderingMode = TrajectoryOrderingMode.EXACT
+    args: TrajectoryArgsMode = TrajectoryArgsMode.EXACT
+    min_accuracy: float = 1.0
+    max_steps: int | None = Field(default=None, ge=0)
+    max_tokens: int | None = Field(default=None, ge=0)
+    max_duration_seconds: float | None = Field(default=None, ge=0.0)
+
+    @model_validator(mode="after")
+    def _validate_steps_and_accuracy(self) -> TrajectoryParams:
+        if not self.steps:
+            raise ValueError("trajectory: 'steps' must not be empty")
+        if not 0.0 <= self.min_accuracy <= 1.0:
+            raise ValueError("trajectory: 'min_accuracy' must be between 0.0 and 1.0")
+        return self
 
 
 class Span(BaseModel):
@@ -134,6 +168,33 @@ def validate_runtime_list_params(check_type: CheckType, params: dict[str, Any]) 
         raise ValueError(f"{check_name}: '{key}' must contain only strings, got: {bad}")
 
 
+def _has_placeholder_values(params: dict[str, Any]) -> bool:
+    """Check if any param value (or nested list/dict leaf) is a bare placeholder."""
+    for value in params.values():
+        if isinstance(value, str) and _is_bare_placeholder(value):
+            return True
+        if isinstance(value, list):
+            for item in value:
+                if isinstance(item, str) and _is_bare_placeholder(item):
+                    return True
+                if isinstance(item, dict) and _has_placeholder_values(item):
+                    return True
+        if isinstance(value, dict) and _has_placeholder_values(value):
+            return True
+    return False
+
+
+def validate_runtime_check_params(check_type: CheckType, params: dict[str, Any]) -> None:
+    if check_type == CheckType.TRAJECTORY:
+        if _has_placeholder_values(params):
+            raise ValueError(
+                "trajectory: unresolved dataset placeholders remain after substitution"
+            )
+        TrajectoryParams.model_validate(params)
+        return
+    validate_runtime_list_params(check_type, params)
+
+
 class Check(BaseModel):
     """A deterministic check within a scenario."""
 
@@ -143,12 +204,14 @@ class Check(BaseModel):
 
     @model_validator(mode="after")
     def _validate_params(self) -> Check:
+        if self.type == CheckType.TRAJECTORY and _has_placeholder_values(self.params):
+            return self
         key = _LIST_PARAM_CHECKS.get(self.type)
         if key is not None:
             value = self.params.get(key)
             if isinstance(value, str) and _is_bare_placeholder(value):
                 return self
-        validate_runtime_list_params(self.type, self.params)
+        validate_runtime_check_params(self.type, self.params)
         return self
 
 
@@ -216,6 +279,13 @@ class Scenario(BaseModel):
             raise ValueError("'criteria' and 'judge' are mutually exclusive")
         return self
 
+    @model_validator(mode="after")
+    def _single_trajectory_check(self) -> Scenario:
+        trajectory_checks = sum(1 for check in self.checks if check.type == CheckType.TRAJECTORY)
+        if trajectory_checks > 1:
+            raise ValueError("at most one 'trajectory' check is allowed per scenario")
+        return self
+
 
 class CheckResult(BaseModel):
     """Result of a single deterministic check."""
@@ -223,6 +293,8 @@ class CheckResult(BaseModel):
     check: str
     passed: bool
     detail: str = ""
+    scores: dict[str, float] = Field(default_factory=dict)
+    diagnostics: dict[str, Any] = Field(default_factory=dict)
 
 
 class JudgeResult(BaseModel):
@@ -255,6 +327,7 @@ class Result(BaseModel):
     check_results: list[CheckResult] = Field(default_factory=list)
     judge_result: JudgeResult | None = None
     trace: TraceSummary | None = None
+    metrics: dict[str, float] = Field(default_factory=dict)
     error: str | None = None
 
 
@@ -326,6 +399,7 @@ class AggregatedResult(BaseModel):
     scenario_id: str
     num_runs: int = 1
     pass_rate: float = 0.0
+    estimated_pass_rate_pow_k: dict[str, float] = Field(default_factory=dict)
     status_counts: dict[str, int] = Field(default_factory=dict)
     cost: VarianceStats = Field(default_factory=VarianceStats)
     duration: VarianceStats = Field(default_factory=VarianceStats)

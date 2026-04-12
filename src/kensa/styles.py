@@ -60,6 +60,16 @@ def judge_cell(r: Result) -> str:
     return "-"
 
 
+def metrics_cell(r: Result) -> str:
+    """Format top-level numeric metrics for compact tabular display."""
+    parts: list[str] = []
+    if "trajectory_accuracy" in r.metrics:
+        parts.append(f"traj {r.metrics['trajectory_accuracy']:.2f}")
+    if "step_efficiency" in r.metrics:
+        parts.append(f"eff {r.metrics['step_efficiency']:.2f}")
+    return " · ".join(parts) if parts else "-"
+
+
 def detail_cell(r: Result, max_len: int = 80) -> str:
     """First failed check, or truncated judge reasoning, or error."""
     for c in r.check_results:
@@ -111,6 +121,7 @@ def build_results_table(results: list[Result], *, title: str | None = None) -> T
     table.add_column("Status")
     table.add_column("Checks")
     table.add_column("Judge")
+    table.add_column("Metrics")
     table.add_column("Cost", justify="right")
     table.add_column("Details")
 
@@ -121,6 +132,7 @@ def build_results_table(results: list[Result], *, title: str | None = None) -> T
             status_badge(r.status),
             checks_cell(r),
             judge_cell(r),
+            metrics_cell(r),
             cost_cell(r),
             Text(detail_cell(r)),
         )
