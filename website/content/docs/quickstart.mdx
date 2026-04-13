@@ -12,7 +12,7 @@ uv add kensa                     # or: pip install kensa
 
 This is the recommended setup for Codex, Cursor, OpenCode, Gemini CLI, and other coding agents. Installs five skills (`audit-evals`, `generate-scenarios`, `generate-judges`, `validate-judge`, `diagnose-errors`) plus the CLI runtime. Then just say "evaluate my agent".
 
-The skill automatically adds `kensa` as a project dependency on its first run, and uses the CLI to drive the eval workflow. No server or extra config needed.
+The skills use the CLI to drive the eval workflow. If `kensa` is missing from the project, `audit-evals` checks for it first and asks before installing it as a dependency. No server or extra config needed.
 
 ## Option 2: Claude Code plugin
 

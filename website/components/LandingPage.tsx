@@ -280,14 +280,14 @@ export function LandingPage() {
             </span>
             <p className="a-footer-etymology">
               <span className="a-footer-reading">/ken·sa/</span>{" "}
-              <span className="a-footer-pos">noun</span>{" "}
               <span className="a-footer-def">
-                — the inspection that confirms something meets the standard
-                before release.
+                — to inspect before releasing to the world.
               </span>
             </p>
           </div>
           <div className="a-footer-links">
+            <a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a>
+            <a href="/docs/changelog">Changelog</a>
             <a href="https://discord.gg/n77EqxUH">Discord</a>
             <a href="https://x.com/kensa_sh">X</a>
           </div>

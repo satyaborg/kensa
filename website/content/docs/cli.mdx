@@ -104,6 +104,9 @@ kensa report --run-id abc123 -v       # full reasoning for a past run
 
 `kensa report` always writes a standalone HTML report to `.kensa/reports/` as a side effect, regardless of `--format`.
 
+When a scenario includes a `trajectory` check, report output also surfaces the numeric
+`trajectory_accuracy` and `step_efficiency` metrics alongside pass/fail.
+
 ## kensa analyze
 
 Surface cost, latency, and anomalies across runs.
@@ -120,7 +123,7 @@ kensa analyze -o analysis.json --format json
 | `--format` | `text` | `text` or `json` |
 | `-o, --output` | stdout | Write to file instead of stdout |
 
-Outputs per-scenario stats — cost percentiles, latency percentiles, token usage, tool frequencies — and flags anomalies (cost outliers, latency outliers, repeated tool calls, high turn counts).
+Outputs trace-level cost and latency distributions, overall success rate, per-tool usage, and flagged anomalies such as cost outliers, latency outliers, repeated tool calls, and high turn counts.
 
 ## kensa doctor
 

@@ -50,6 +50,7 @@ A **span** represents one unit of work:
 | `agent` | Top-level agent span (parent of all others) |
 | `chain` | Orchestration step (e.g. LangChain chain) |
 | `retriever` | RAG retrieval step |
+| `evaluator` | Evaluation or scoring step emitted by the traced system |
 
 Spans form a tree via parent/child relationships. Kensa reads the JSONL after execution and translates it to an internal format for checks and judging.
 
@@ -59,6 +60,7 @@ Checks are deterministic, free, and fast. They answer binary questions about the
 
 - **Output checks**: Does the output contain a string? Match a regex?
 - **Tool checks**: Was a tool called? In the right order? Without duplicates?
+- **Trajectory checks**: Did the overall tool-call path match the expected sequence and stay within inline budgets?
 - **Resource checks**: Under cost limit? Under turn limit? Under time limit?
 
 See [Checks](/docs/checks) for the full list of check types.
@@ -93,14 +95,11 @@ Results are stored as JSON in `.kensa/results/` and can be rendered as terminal 
 
 Each `kensa run` invocation produces a **run manifest**, a record of which scenarios ran, their trace paths, exit codes, and durations.
 
-Running the same scenarios multiple times enables:
+Repeated runs give you more traces to inspect with `kensa analyze`, which currently surfaces
+trace-level cost and latency distributions, tool usage, success rate, and anomaly flags.
 
-- **Variance detection**: Are results consistent or flaky?
-- **Pass rate tracking**: What percentage of runs pass each scenario?
-- **Cost/latency stats**: Mean, stddev, min, max across runs.
-- **Anomaly flagging**: Cost outliers, latency outliers, repeated tool calls, high turn counts.
-
-Use `kensa analyze` to surface these stats.
+When a scenario uses a `trajectory` check, result reports also surface
+`trajectory_accuracy` and `step_efficiency` alongside pass/fail.
 
 ## Evaluation pipeline
 

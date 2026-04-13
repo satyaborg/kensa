@@ -19,12 +19,16 @@ run_command: [python, agent.py]
 expected_outcome: Agent returns the correct priority label.
 
 checks:
+  - type: trajectory
+    params:
+      steps:
+        - tool: classify_ticket
+      max_steps: 1
+      max_tokens: 2000
+    description: One classifier tool call, no extra wandering.
   - type: output_matches
     params: { pattern: "^P[123]$" }
     description: Output must be exactly P1, P2, or P3.
-  - type: max_cost
-    params: { max_usd: 0.05 }
-    description: Stay under five cents.
 
 criteria: |
   P1 is for outages or data loss affecting multiple users.
@@ -55,6 +59,7 @@ criteria: |
 
 **Checks** are deterministic and free. Use them for objective, binary conditions:
 - Was a specific tool called?
+- Did the agent follow the expected tool trajectory?
 - Did the agent stay under budget?
 - Did it complete in fewer than N turns?
 
@@ -87,4 +92,26 @@ criteria: |
   The final answer must include a confirmation number.
 ```
 
-The `input_field` specifies which JSONL field becomes the scenario input. Other fields can be referenced in check params via `{{...}}` placeholders. Re-run for variance stats, flaky detection, and anomaly flagging.
+The `input_field` specifies which JSONL field becomes the scenario input. Other fields can be referenced in check params via `{{...}}` placeholders. Re-run to gather more traces for comparison and anomaly analysis.
+
+## Trajectory checks
+
+Use `trajectory` when tool-call correctness matters more than any single tool event:
+
+```yaml
+checks:
+  - type: trajectory
+    params:
+      steps:
+        - tool: search_docs
+        - tool: answer_user
+      ordering: exact      # or: any_order
+      args: ignore         # or: exact
+      min_accuracy: 0.8
+      max_steps: 3
+      max_tokens: 2500
+      max_duration_seconds: 15
+```
+
+This check emits `trajectory_accuracy` and `step_efficiency` metrics in reports. In V1, each
+scenario can define at most one `trajectory` check.

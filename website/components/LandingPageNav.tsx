@@ -53,9 +53,6 @@ export function LandingPageNav() {
       <div className="a-nav-inner">
         <Logo />
         <div className="a-nav-links">
-          <a href="/llms.txt" target="_blank" rel="noopener noreferrer">
-            llms.txt
-          </a>
           <Link href="/docs">Docs</Link>
           <a
             href="https://github.com/satyaborg/kensa"
