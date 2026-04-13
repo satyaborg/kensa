@@ -7,7 +7,7 @@ description: What's new in kensa.
 
 Trajectory checks let you assert that an agent followed the right tool-call path.
 
-- New `trajectory` check type validates tool-call sequences against expected patterns — supports strict ordering, any-order matching, and `{...}` wildcards for don't-care segments.
+- New `trajectory` check type validates tool-call sequences against expected patterns — supports strict ordering and any-order matching, with optional accuracy thresholds and inline budgets.
 - Aggregate reports now include estimated k-run pass rates per scenario, so you can spot flaky evals without guessing.
 - Fixed trajectory placeholder validation rejecting valid unordered sequences.
 
