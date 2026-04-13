@@ -52,6 +52,8 @@ A **span** represents one unit of work:
 | `retriever` | RAG retrieval step |
 | `evaluator` | Evaluation or scoring step emitted by the traced system |
 
+These span kinds follow the [OpenInference](https://github.com/Arize-ai/openinference) semantic conventions, which extend OpenTelemetry with AI-specific span types.
+
 Spans form a tree via parent/child relationships. Kensa reads the JSONL after execution and translates it to an internal format for checks and judging.
 
 ## Checks
