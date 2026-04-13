@@ -14,6 +14,8 @@
     "cli",
     "ci",
     "---",
-    "examples"
+    "examples",
+    "---",
+    "changelog"
   ]
 }

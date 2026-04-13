@@ -88,7 +88,7 @@ uv add "kensa[all]"
 | `kensa doctor` | Check instrumentation, config, and environment readiness |
 | `kensa eval` | Run + judge + report in one command |
 | `kensa report` | Show the latest results in terminal, Markdown, JSON, or HTML |
-| `kensa analyze` | Flag slow, expensive, flaky, or error-prone traces |
+| `kensa analyze` | Flag slow, expensive, anomalous, or error-prone traces |
 
 ## Manual workflow
 

@@ -8,6 +8,7 @@ out/
 # fumadocs
 .source/
 
+
 # production
 build/
 

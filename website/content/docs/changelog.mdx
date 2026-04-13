@@ -1,0 +1,41 @@
+---
+title: Changelog
+description: What's new in kensa.
+---
+
+## [0.4.0](https://github.com/satyaborg/kensa/releases/tag/v0.4.0) — 2026-04-12
+
+Trajectory checks let you assert that an agent followed the right tool-call path.
+
+- New `trajectory` check type validates tool-call sequences against expected patterns — supports strict ordering, any-order matching, and `{...}` wildcards for don't-care segments.
+- Aggregate reports now include estimated k-run pass rates per scenario, so you can spot flaky evals without guessing.
+- Fixed trajectory placeholder validation rejecting valid unordered sequences.
+
+## [0.3.0](https://github.com/satyaborg/kensa/releases/tag/v0.3.0) — 2026-04-10
+
+Tool checks now accept lists, so you can assert multiple tools in one check.
+
+- **Breaking:** `tool_called` and `tool_not_called` are now `tools_called` and `tools_not_called`. They take a list of tool names with set-membership semantics (order-free). Use `tool_order` when sequence matters.
+- Validation errors now tell you which item in a scenario is invalid, not just that something is wrong.
+
+## [0.2.0](https://github.com/satyaborg/kensa/releases/tag/v0.2.0) — 2026-04-08
+
+Run commands are safer — no more shell interpolation of inputs.
+
+- **Breaking:** `run_command` now takes an argv list instead of a shell string with `{{input}}` templates. Input is appended as the final argument. This removes the command-injection surface from the old `shlex.quote` approach.
+- Omitted `input` fields and explicit empty strings are now handled as distinct cases.
+
+## [0.1.0](https://github.com/satyaborg/kensa/releases/tag/v0.1.0) — 2026-04-07
+
+Initial harness release.
+
+- Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. Add `from kensa import instrument; instrument()` to your agent — that's the only code change.
+- Auto-instruments Anthropic, OpenAI, and LangChain SDKs via OpenTelemetry. Writes tool calls, token counts, and latency as JSONL spans.
+- Deterministic checks: `output_contains`, `output_not_contains`, `tools_called`, `tools_not_called`, `tool_order`, `cost_threshold`. Checks run before the judge — if a check fails, no tokens are spent.
+- LLM judge with Anthropic and OpenAI providers. Auto-resolves from whichever API key is set.
+- Reports in four formats: terminal, markdown, JSON, HTML.
+- `kensa analyze` computes multi-run variance, flags flaky scenarios, and reports cost/latency anomalies.
+- Dataset mode: point `dataset` at a JSONL file, each row becomes a run.
+- `kensa doctor` validates environment, dependencies, API keys, and scenario files.
+- Five Claude Code skills: `audit-evals`, `generate-scenarios`, `generate-judges`, `validate-judge`, `diagnose-errors`.
+- Five example agents: code reviewer, customer support, incident triage, SDR qualifier, SQL analyst.

@@ -14,6 +14,7 @@ Checks run before the LLM judge to save cost. If any check fails, the judge is s
 | `tools_called` | All listed tools were invoked (set membership, order-free) |
 | `tools_not_called` | None of the listed tools were invoked |
 | `tool_order` | Tools called in this temporal sequence (use only when order is load-bearing) |
+| `trajectory` | Match the expected tool-call path, optionally with accuracy threshold and inline budgets |
 | `max_cost` | Total cost under threshold |
 | `max_turns` | LLM call count under limit |
 | `max_duration` | Execution time under limit |
@@ -57,10 +58,28 @@ checks:
     params: { order: [search_flights, book_flight] }
     description: Must search before booking
 
+  # Canonical tool-call trajectory with optional budgets
+  - type: trajectory
+    params:
+      steps:
+        - tool: search_flights
+        - tool: book_flight
+      ordering: exact
+      args: ignore
+      min_accuracy: 1.0
+      max_steps: 2
+      max_tokens: 2000
+      max_duration_seconds: 30
+    description: Search, then book, within budget
+
   # No duplicate calls (trace-wide; flags any tool called twice with the same args)
   - type: no_repeat_calls
     description: Agent should not redo identical work
 ```
+
+`trajectory` is the higher-level path check for tool correctness. It emits `trajectory_accuracy`
+and `step_efficiency` metrics in reports, and in V1 it is limited to one trajectory check per
+scenario.
 
 ### Resource checks
 

@@ -1045,10 +1045,16 @@ pre {
     font-size: 1rem;
 }
 
-.d-prose ul,
+.d-prose ul {
+    margin: 0 0 16px;
+    padding-left: 24px;
+    list-style-type: disc;
+}
+
 .d-prose ol {
     margin: 0 0 16px;
     padding-left: 24px;
+    list-style-type: decimal;
 }
 
 .d-prose li {

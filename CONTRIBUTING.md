@@ -50,7 +50,7 @@ uv run ty check                                     # type check
 
 - Keep PRs small and focused. If a PR touches >300 lines, consider splitting it.
 - One logical change per commit.
-- PRs run CI automatically (lint + test).
+- PRs run CI automatically (lint + test + type check).
 
 ## Lint rules
 
