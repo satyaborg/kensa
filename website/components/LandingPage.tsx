@@ -287,7 +287,6 @@ export function LandingPage() {
           </div>
           <div className="a-footer-links">
             <a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a>
-            <a href="/docs/changelog">Changelog</a>
             <a href="https://discord.gg/n77EqxUH">Discord</a>
             <a href="https://x.com/kensa_sh">X</a>
           </div>
