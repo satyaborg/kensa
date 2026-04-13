@@ -54,6 +54,7 @@ export function LandingPageNav() {
         <Logo />
         <div className="a-nav-links">
           <Link href="/docs">Docs</Link>
+          <Link href="/docs/changelog">Changelog</Link>
           <a
             href="https://github.com/satyaborg/kensa"
             target="_blank"
