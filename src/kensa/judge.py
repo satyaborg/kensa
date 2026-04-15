@@ -257,7 +257,6 @@ def _parse_judge_response(text: str) -> JudgeResult:
                 evidence=evidence,
             )
 
-        # Legacy fallback: "passed" bool
         passed = bool(data.get("passed", False))
         return JudgeResult(
             passed=passed,

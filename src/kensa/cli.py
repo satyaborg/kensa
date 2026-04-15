@@ -81,9 +81,6 @@ def _validate_run_id(run_id: str) -> str:
     return run_id
 
 
-# --- Shared helpers ---
-
-
 def _run_judge_manifest(
     manifest: RunManifest,
     judge_provider: JudgeProvider | None,
@@ -415,8 +412,6 @@ def eval_cmd(
 
     ids = list(scenario_id) if scenario_id else None
     try:
-        # Pre-flight: if any scenario needs a judge, resolve it now before
-        # spending time (and money) running scenarios.
         scenarios = load_scenarios(scenario_dir=scenario_dir, scenario_ids=ids)
         needs_judge = any(sc.criteria or sc.judge for sc in scenarios)
         judge_provider = get_judge(model) if needs_judge else None
@@ -436,7 +431,6 @@ def eval_cmd(
         html_path = _save_html_report(manifest.run_id, results)
 
         if fmt == "terminal":
-            # Single combined list: one line per result with status, cost, detail
             for r in results:
                 parts = [r.scenario_id]
                 if r.trace:

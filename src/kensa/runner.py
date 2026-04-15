@@ -20,7 +20,6 @@ from kensa.translate import oi_to_kensa
 
 DEFAULT_TIMEOUT = 300
 
-# Env vars that scenario overrides must never replace.
 _PROTECTED_ENV_VARS: frozenset[str] = frozenset(
     {
         "KENSA_TRACE_DIR",
