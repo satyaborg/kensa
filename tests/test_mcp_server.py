@@ -639,8 +639,8 @@ class TestLauncher:
     def test_exits_with_hint_when_fastmcp_missing(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
     ) -> None:
-        """The kensa-mcp console script must print a clean install hint on a
-        base install (no ``[mcp]`` extra), not a two-level import traceback."""
+        """The launcher (used by the ``kensa-mcp`` shim) must print a clean
+        install hint when ``fastmcp`` is missing, not a multi-frame traceback."""
         import sys
 
         from kensa import _mcp_launcher

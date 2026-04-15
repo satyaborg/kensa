@@ -814,7 +814,13 @@ def run_server(
 
 
 def main() -> None:
-    """Entry point for the ``kensa-mcp`` console script."""
+    """argparse entry point called by :mod:`kensa._mcp_launcher`.
+
+    The external ``kensa-mcp`` shim package (``packages/kensa-mcp/``)
+    registers a console script that routes through the launcher to here.
+    The ``kensa mcp`` click subcommand bypasses this and calls
+    :func:`run_server` directly.
+    """
     parser = argparse.ArgumentParser(description="Run the kensa MCP server.")
     parser.add_argument("--http", action="store_true", help="Use HTTP transport instead of stdio.")
     parser.add_argument("--host", default="127.0.0.1", help="HTTP host (with --http).")

@@ -68,7 +68,6 @@ dev = [
 
 [project.scripts]
 kensa = "kensa.cli:cli"
-kensa-mcp = "kensa._mcp_launcher:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kensa"]
