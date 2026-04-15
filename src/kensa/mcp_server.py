@@ -27,6 +27,7 @@ import json
 from pathlib import Path
 from typing import Any, Literal
 
+import yaml
 from pydantic import BaseModel, Field
 
 try:
@@ -64,6 +65,7 @@ from kensa.paths import (
 ErrorCode = Literal[
     "scenarios_missing",
     "scenario_not_found",
+    "scenario_invalid",
     "run_not_found",
     "no_judge_key",
     "invalid_run_id",
@@ -96,11 +98,21 @@ class DoctorCheck(BaseModel):
 
 
 class DoctorResponse(BaseModel):
+    """Pre-flight readiness report.
+
+    ``ready`` matches the CLI's ``kensa doctor`` semantics: provider-specific
+    API-key checks are soft (at least one API key is required, but missing
+    provider-specific ones do not block). ``hard_failures`` is the
+    subset of ``failures`` that actually gate readiness; clients should prefer
+    it over ``failures`` when deciding whether to proceed.
+    """
+
     ready: bool
     passed: int
     total: int
     checks: list[DoctorCheck]
     failures: list[DoctorCheck]
+    hard_failures: list[DoctorCheck]
 
 
 class RunSummary(BaseModel):
@@ -296,25 +308,32 @@ def init(blank: bool = False, force: bool = False) -> InitResponse | MCPError:
     return InitResponse(**result.model_dump())
 
 
+_SOFT_CHECK_MARKERS: tuple[str, ...] = ("API_KEY",)
+
+
 @mcp.tool
 def doctor() -> DoctorResponse:
     """Run pre-flight diagnostics (Python, SDKs, API keys, scenarios, judge).
 
     Returns the complete checklist plus a ``ready`` flag. Never fails; a
     misconfigured environment is reported via individual check entries.
+    Readiness mirrors the CLI: non-key failures block readiness, while missing
+    provider-specific API keys do not — only the *absence of any* API key does.
     """
     from kensa.doctor import run_doctor
 
     raw = run_doctor()
     checks = [DoctorCheck(name=n, ok=ok, detail=d) for n, ok, d in raw]
     failures = [c for c in checks if not c.ok]
+    hard_failures = [c for c in failures if not any(m in c.name for m in _SOFT_CHECK_MARKERS)]
     api_ok = any(c.ok for c in checks if "API_KEY" in c.name)
     return DoctorResponse(
-        ready=not failures and api_ok,
+        ready=not hard_failures and api_ok,
         passed=sum(1 for c in checks if c.ok),
         total=len(checks),
         checks=checks,
         failures=failures,
+        hard_failures=hard_failures,
     )
 
 
@@ -354,6 +373,12 @@ async def run(
             error=str(e),
             code="scenario_not_found",
             hint="Check available IDs via the kensa://scenarios resource.",
+        )
+    except (ValueError, TypeError, yaml.YAMLError) as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_invalid",
+            hint=f"Fix YAML syntax or schema in scenario files under {scenario_dir}/.",
         )
     except Exception as e:
         return MCPError(error=str(e), code="internal")
@@ -406,19 +431,32 @@ async def judge(
             code="internal",
             hint="Install provider extras: uv add 'kensa[anthropic]' or 'kensa[openai]'.",
         )
+    except (ValueError, TypeError, yaml.YAMLError) as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_invalid",
+            hint=f"Fix YAML syntax or schema in scenario files under {scenario_dir}/.",
+        )
 
     loop = asyncio.get_running_loop()
     _, on_judge = _progress_bridge(ctx, loop)
     if ctx:
         await ctx.info(f"Judging run {manifest.run_id}")
 
-    results, skipped = await asyncio.to_thread(
-        judge_manifest,
-        manifest,
-        provider,
-        Path(scenario_dir),
-        on_judge,
-    )
+    try:
+        results, skipped = await asyncio.to_thread(
+            judge_manifest,
+            manifest,
+            provider,
+            Path(scenario_dir),
+            on_judge,
+        )
+    except (ValueError, TypeError, yaml.YAMLError) as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_invalid",
+            hint=f"Fix YAML syntax or schema in scenario files under {scenario_dir}/.",
+        )
     _save_results(manifest.run_id, results)
 
     counts = _summarise_results(results)
@@ -462,6 +500,12 @@ async def eval(
             error=str(e),
             code="scenario_not_found",
             hint="Check available IDs via the kensa://scenarios resource.",
+        )
+    except (ValueError, TypeError, yaml.YAMLError) as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_invalid",
+            hint=f"Fix YAML syntax or schema in scenario files under {scenario_dir}/.",
         )
 
     needs_judge = any(sc.criteria or sc.judge for sc in scenarios)
@@ -645,13 +689,25 @@ def run_results(run_id: str) -> list[Result]:
         raise ResourceError(f"No results for run {run_id}. Call judge() first.") from e
 
 
-@mcp.resource("kensa://runs/{run_id}/trace/{scenario}")
-def run_trace(run_id: str, scenario: str) -> list[Span]:
-    """Spans for one scenario execution inside a run."""
+@mcp.resource("kensa://runs/{run_id}/trace/{scenario}/{index}")
+def run_trace(run_id: str, scenario: str, index: str) -> list[Span]:
+    """Spans for a single run of a scenario inside a run.
+
+    ``index`` is the 0-based position in the manifest's per-scenario run list.
+    Dataset-backed scenarios produce one entry per row, so iterate indices to
+    access every trace. ``len(manifest.scenarios[scenario])`` (exposed via the
+    ``kensa://runs/{run_id}`` resource) gives the valid range.
+    """
     from kensa.runner import read_trace
 
     if not _validate_run_id(run_id) or not _validate_run_id(scenario):
         raise ResourceError("Invalid run_id or scenario id")
+    try:
+        idx = int(index)
+    except ValueError as e:
+        raise ResourceError(f"Index must be a non-negative integer: {index!r}") from e
+    if idx < 0:
+        raise ResourceError(f"Index must be a non-negative integer: {index!r}")
     try:
         manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
     except FileNotFoundError as e:
@@ -660,10 +716,14 @@ def run_trace(run_id: str, scenario: str) -> list[Span]:
     runs = manifest.scenarios.get(scenario)
     if not runs:
         raise ResourceError(f"Scenario {scenario!r} not in run {run_id}")
+    if idx >= len(runs):
+        raise ResourceError(
+            f"Index {idx} out of range for {scenario} in run {run_id} (have {len(runs)})"
+        )
 
-    sr = runs[0]
+    sr = runs[idx]
     if not sr.trace_path:
-        raise ResourceError(f"No trace captured for {scenario} in run {run_id}")
+        raise ResourceError(f"No trace captured for {scenario}[{idx}] in run {run_id}")
 
     resolved = Path(sr.trace_path).resolve()
     trace_root = TRACE_DIR.resolve()

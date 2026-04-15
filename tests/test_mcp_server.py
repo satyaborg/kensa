@@ -57,7 +57,7 @@ EXPECTED_STATIC_RESOURCES = {"kensa://runs", "kensa://scenarios", "kensa://judge
 EXPECTED_TEMPLATES = {
     "kensa://runs/{run_id}",
     "kensa://runs/{run_id}/results",
-    "kensa://runs/{run_id}/trace/{scenario}",
+    "kensa://runs/{run_id}/trace/{scenario}/{index}",
     "kensa://scenarios/{scenario_id}",
     "kensa://judges/{name}",
 }
@@ -80,7 +80,11 @@ def _write_scenario(scenario_dir: Path, scenario_id: str, **overrides: object) -
     (scenario_dir / f"{scenario_id}.yaml").write_text(yaml.safe_dump(doc))
 
 
-def _write_manifest(run_id: str, scenario_ids: list[str] | None = None) -> Path:
+def _write_manifest(
+    run_id: str,
+    scenario_ids: list[str] | None = None,
+    runs_per_scenario: int = 1,
+) -> Path:
     run_dir = Path(".kensa/runs")
     trace_dir = Path(".kensa/traces")
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -88,11 +92,20 @@ def _write_manifest(run_id: str, scenario_ids: list[str] | None = None) -> Path:
     sids = scenario_ids or ["s1"]
     scenarios: dict[str, list[ScenarioRun]] = {}
     for sid in sids:
-        trace_file = trace_dir / f"{sid}.jsonl"
-        trace_file.write_text("")
-        scenarios[sid] = [
-            ScenarioRun(trace_path=str(trace_file), exit_code=0, duration_seconds=0.1)
-        ]
+        runs: list[ScenarioRun] = []
+        for i in range(runs_per_scenario):
+            suffix = "" if runs_per_scenario == 1 else f"-{i}"
+            trace_file = trace_dir / f"{sid}{suffix}.jsonl"
+            trace_file.write_text("")
+            runs.append(
+                ScenarioRun(
+                    trace_path=str(trace_file),
+                    exit_code=0,
+                    duration_seconds=0.1,
+                    dataset_row={"row": i} if runs_per_scenario > 1 else None,
+                )
+            )
+        scenarios[sid] = runs
     manifest = RunManifest(
         run_id=run_id,
         timestamp=datetime(2026, 3, 1, tzinfo=timezone.utc),
@@ -178,6 +191,75 @@ class TestDoctor:
         assert out.total == len(out.checks)
         assert out.passed == sum(1 for c in out.checks if c.ok)
         assert all(c.ok is False for c in out.failures)
+        assert all(c.ok is False for c in out.hard_failures)
+        assert {c.name for c in out.hard_failures}.issubset({c.name for c in out.failures})
+
+    def test_single_provider_is_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Setting only one API key keeps a healthy env ``ready=True`` — the
+        other provider's missing key is a soft failure, matching CLI semantics.
+        """
+        monkeypatch.setattr(
+            "kensa.doctor.run_doctor",
+            lambda: [
+                ("python", True, "ok"),
+                ("pkg manager", True, "uv"),
+                ("scenarios", True, "1 scenario"),
+                (".env file", True, ".env"),
+                ("trace dir", True, "writable"),
+                ("ANTHROPIC_API_KEY", True, "set"),
+                ("OPENAI_API_KEY", False, "not set"),
+                ("judge", True, "anthropic"),
+            ],
+        )
+        out = doctor()
+        assert out.ready is True
+        assert out.hard_failures == []
+        names = {f.name for f in out.failures}
+        assert "OPENAI_API_KEY" in names
+
+    def test_hard_failure_blocks_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """A genuinely broken env (no scenarios dir, no .env) stays not-ready
+        even with both API keys set — hard failures still gate readiness.
+        """
+        monkeypatch.setattr(
+            "kensa.doctor.run_doctor",
+            lambda: [
+                ("python", True, "ok"),
+                ("pkg manager", True, "uv"),
+                ("scenarios", False, ".kensa/scenarios/ does not exist"),
+                (".env file", False, "no .env found"),
+                ("trace dir", True, "writable"),
+                ("ANTHROPIC_API_KEY", True, "set"),
+                ("OPENAI_API_KEY", True, "set"),
+                ("judge", True, "anthropic"),
+            ],
+        )
+        out = doctor()
+        assert out.ready is False
+        assert out.hard_failures
+        hard_names = {c.name for c in out.hard_failures}
+        assert "scenarios" in hard_names
+
+    def test_sdk_failure_blocks_ready(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """SDK and judge failures are hard failures, matching CLI exit logic."""
+        monkeypatch.setattr(
+            "kensa.doctor.run_doctor",
+            lambda: [
+                ("python", True, "ok"),
+                ("pkg manager", True, "uv"),
+                ("scenarios", True, "1 scenario"),
+                (".env file", True, ".env"),
+                ("trace dir", True, "writable"),
+                ("ANTHROPIC_API_KEY", False, "not set"),
+                ("OPENAI_API_KEY", True, "set"),
+                ("openai sdk", False, "instrumentor missing"),
+                ("judge", True, "openai"),
+            ],
+        )
+        out = doctor()
+        assert out.ready is False
+        hard_names = {c.name for c in out.hard_failures}
+        assert "openai sdk" in hard_names
 
 
 class TestRun:
@@ -193,6 +275,14 @@ class TestRun:
         assert isinstance(out, MCPError)
         assert out.code == "scenario_not_found"
         assert "ghost" in out.error
+
+    def test_invalid_scenario_returns_scenario_invalid(self, tmp_path: Path) -> None:
+        scenarios = tmp_path / "scenarios"
+        _write_scenario(scenarios, "s1", dataset="rows.jsonl")
+        out = asyncio.run(run(scenario_dir=str(scenarios)))
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
+        assert "input_field" in out.error
 
     def test_happy_path_no_spans(self, tmp_path: Path) -> None:
         """A trivial scenario runs but emits no spans. The runner records the
@@ -226,6 +316,52 @@ class TestJudge:
         assert isinstance(out, JudgeSummary)
         assert out.run_id == "20260301T000000"
         assert out.results_uri == "kensa://runs/20260301T000000/results"
+
+    def test_malformed_yaml_returns_scenario_invalid(self, tmp_path: Path) -> None:
+        """A malformed scenario YAML referenced by the manifest must surface as
+        a typed MCPError(scenario_invalid), not bubble out as a generic error."""
+        with _isolated(tmp_path):
+            scenario_dir = Path(".kensa/scenarios")
+            scenario_dir.mkdir(parents=True)
+            (scenario_dir / "s1.yaml").write_text("{: not valid yaml")
+            _write_manifest("20260301T000001", ["s1"])
+            out = asyncio.run(judge())
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
+
+    def test_schema_violation_returns_scenario_invalid(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A scenario whose YAML parses but fails model validation (e.g. dataset
+        without input_field) must map to scenario_invalid."""
+        monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-test")
+        with _isolated(tmp_path):
+            scenario_dir = Path(".kensa/scenarios")
+            _write_scenario(
+                scenario_dir,
+                "s1",
+                dataset="rows.jsonl",
+                criteria="must pass",
+            )
+            _write_manifest("20260301T000002", ["s1"])
+            out = asyncio.run(judge())
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
+        assert "input_field" in out.error
+
+    def test_later_invalid_scenario_returns_scenario_invalid_after_judge_preflight(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Invalid later scenarios must not escape after judge preflight passes."""
+        monkeypatch.setattr("kensa.judge.get_judge", lambda model=None: None)
+        with _isolated(tmp_path):
+            scenario_dir = Path(".kensa/scenarios")
+            _write_scenario(scenario_dir, "s1", criteria="must pass")
+            (scenario_dir / "s2.yaml").write_text("{: not valid yaml")
+            _write_manifest("20260301T000003", ["s1", "s2"])
+            out = asyncio.run(judge())
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
 
 
 class TestEval:
@@ -266,6 +402,26 @@ class TestEval:
         assert out.run_id
         assert out.total == 1
         assert out.results_uri == f"kensa://runs/{out.run_id}/results"
+
+    def test_malformed_yaml_returns_scenario_invalid(self, tmp_path: Path) -> None:
+        """Malformed YAML in the scenario dir must surface as a typed
+        MCPError(scenario_invalid), not escape as a generic tool failure."""
+        scenarios = tmp_path / "scenarios"
+        scenarios.mkdir()
+        (scenarios / "bad.yaml").write_text("{: not valid yaml")
+        out = asyncio.run(eval(scenario_dir=str(scenarios)))
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
+
+    def test_schema_violation_returns_scenario_invalid(self, tmp_path: Path) -> None:
+        """Scenario YAML that parses but fails pydantic validation must map to
+        scenario_invalid (e.g. dataset without input_field)."""
+        scenarios = tmp_path / "scenarios"
+        _write_scenario(scenarios, "s1", dataset="rows.jsonl")
+        out = asyncio.run(eval(scenario_dir=str(scenarios)))
+        assert isinstance(out, MCPError)
+        assert out.code == "scenario_invalid"
+        assert "input_field" in out.error
 
 
 class TestReport:
@@ -359,25 +515,45 @@ class TestRunResultsResource:
 class TestRunTraceResource:
     def test_invalid_ids(self) -> None:
         with pytest.raises(ResourceError):
-            run_trace("../evil", "s1")
+            run_trace("../evil", "s1", "0")
         with pytest.raises(ResourceError):
-            run_trace("r1", "../evil")
+            run_trace("r1", "../evil", "0")
 
     def test_run_not_found(self, tmp_path: Path) -> None:
         with _isolated(tmp_path), pytest.raises(ResourceError):
-            run_trace("nonexistent", "s1")
+            run_trace("nonexistent", "s1", "0")
 
     def test_scenario_not_in_run(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):
             _write_manifest("r1", ["s1"])
             with pytest.raises(ResourceError):
-                run_trace("r1", "ghost")
+                run_trace("r1", "ghost", "0")
 
     def test_happy_path(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):
             _write_manifest("r1", ["s1"])
-            out = run_trace("r1", "s1")
+            out = run_trace("r1", "s1", "0")
         assert out == []
+
+    def test_dataset_expanded_runs_all_reachable(self, tmp_path: Path) -> None:
+        """Every dataset row's trace must be reachable, not just index 0."""
+        with _isolated(tmp_path):
+            _write_manifest("r1", ["s1"], runs_per_scenario=3)
+            traces = [run_trace("r1", "s1", str(i)) for i in range(3)]
+        assert traces == [[], [], []]
+
+    def test_index_out_of_range(self, tmp_path: Path) -> None:
+        with _isolated(tmp_path):
+            _write_manifest("r1", ["s1"], runs_per_scenario=2)
+            with pytest.raises(ResourceError, match="out of range"):
+                run_trace("r1", "s1", "5")
+
+    @pytest.mark.parametrize("bad", ["abc", "-1", "", "1.5"])
+    def test_invalid_index(self, tmp_path: Path, bad: str) -> None:
+        with _isolated(tmp_path):
+            _write_manifest("r1", ["s1"])
+            with pytest.raises(ResourceError, match="non-negative integer"):
+                run_trace("r1", "s1", bad)
 
 
 class TestScenariosResource:

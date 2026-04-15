@@ -112,7 +112,7 @@ kensa mcp                       # alias for kensa-mcp
 kensa://runs                          # list of recent runs
 kensa://runs/{id}                     # manifest + summary for one run
 kensa://runs/{id}/results             # full judged results
-kensa://runs/{id}/trace/{scenario}    # spans for one scenario execution
+kensa://runs/{id}/trace/{scenario}/{index}  # spans for one scenario execution
 kensa://scenarios                     # list of scenarios
 kensa://scenarios/{id}                # full scenario YAML
 kensa://judges                        # list of judge prompt names
