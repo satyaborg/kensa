@@ -14,6 +14,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+
+# Skip the entire module when the optional `mcp` extra isn't installed —
+# keeps local `pytest` runs clean for contributors who haven't installed
+# fastmcp. CI installs the extra so the tests always run there.
+pytest.importorskip("fastmcp")
+
 import yaml
 from click.testing import CliRunner
 from fastmcp import Client
