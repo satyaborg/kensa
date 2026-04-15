@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -290,6 +291,7 @@ def run_scenarios(
     trace_dir: str = str(TRACE_DIR),
     timeout: int = DEFAULT_TIMEOUT,
     scenarios: list[Scenario] | None = None,
+    on_progress: Callable[[int, int, str], None] | None = None,
 ) -> RunManifest:
     """Run all scenarios (or filtered subset) and return a manifest.
 
@@ -297,6 +299,10 @@ def run_scenarios(
     Failed scenarios get exit_code=-1 and the error in stderr.
 
     Pass pre-loaded ``scenarios`` to skip the redundant ``load_scenarios`` call.
+    ``on_progress(current, total, scenario_id)`` is invoked before each scenario
+    starts; it is optional and purely for progress reporting (e.g. from the MCP
+    server). Dataset expansion is not reflected in the tick count — one tick
+    per scenario regardless of row count.
     """
     if scenarios is None:
         scenarios = load_scenarios(scenario_dir, scenario_ids)
@@ -304,8 +310,11 @@ def run_scenarios(
     run_id = timestamp.strftime("%Y%m%dT%H%M%S%f")[:18]
 
     manifest = RunManifest(run_id=run_id, timestamp=timestamp)
+    total = len(scenarios)
 
-    for scenario in scenarios:
+    for idx, scenario in enumerate(scenarios, 1):
+        if on_progress:
+            on_progress(idx, total, scenario.id)
         if scenario.dataset and scenario.input_field:
             rows = load_dataset(Path(scenario_dir), scenario.dataset)
             runs: list[ScenarioRun] = []

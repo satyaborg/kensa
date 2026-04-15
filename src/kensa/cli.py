@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
-import os
 import re
 import sys
 from pathlib import Path
@@ -15,8 +14,6 @@ from rich.markup import escape as rich_escape
 from kensa.judge import JudgeProvider
 from kensa.models import Result, ResultStatus, RunManifest
 from kensa.paths import (
-    AGENT_DIR,
-    JUDGE_DIR,
     REPORT_DIR,
     RESULT_DIR,
     SCENARIO_DIR,
@@ -49,7 +46,7 @@ def _get_version() -> str:
         return "dev"
 
 
-_COMMAND_ORDER = ["init", "doctor", "run", "judge", "report", "eval", "analyze"]
+_COMMAND_ORDER = ["init", "doctor", "run", "judge", "report", "eval", "analyze", "mcp"]
 
 
 class KensaGroup(click.Group):
@@ -520,36 +517,21 @@ def analyze(trace_dir: str, fmt: str, output: str | None) -> None:
 def init(force: bool, blank: bool) -> None:
     """Set up .kensa/ dir with example agent."""
     from kensa.doctor import run_doctor
+    from kensa.scaffold import init_kensa
 
     s = Steps()
     s.start("kensa init")
 
-    dirs = [SCENARIO_DIR, TRACE_DIR, JUDGE_DIR, AGENT_DIR]
-    any_created = False
-    for d in dirs:
-        if not d.exists():
-            d.mkdir(parents=True, exist_ok=True)
-            any_created = True
-    if any_created:
+    result = init_kensa(blank=blank, force=force)
+
+    if result.directories_created:
         s.item("created .kensa/")
     else:
         s.item(".kensa/ already scaffolded")
-
-    if not blank:
-        agent_file = AGENT_DIR / "example.py"
-        dataset_file = SCENARIO_DIR / "example.jsonl"
-        example = SCENARIO_DIR / "example.yaml"
-        if example.exists() and not force:
-            s.item("example scenario ready (--force to regenerate)")
-        else:
-            agent_tpl, scenario_tpl, dataset_tpl, _ = _pick_templates()
-            agent_file.write_text(agent_tpl)
-            s.item(f"wrote {agent_file}")
-            if dataset_tpl:
-                dataset_file.write_text(dataset_tpl)
-                s.item(f"wrote {dataset_file}")
-            example.write_text(scenario_tpl)
-            s.item(f"wrote {example}")
+    for f in result.files_written:
+        s.item(f"wrote {f}")
+    if not blank and result.example_already_existed:
+        s.item("example scenario ready (--force to regenerate)")
 
     checks = run_doctor()
     if blank:
@@ -587,170 +569,6 @@ def init(force: bool, blank: bool) -> None:
     s.end()
 
 
-def _pick_templates() -> tuple[str, str, str, str]:
-    """Return (agent, scenario, dataset, provider) based on available API keys."""
-    from kensa.runner import ensure_dotenv_loaded
-
-    ensure_dotenv_loaded()
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return _ANTHROPIC_AGENT, _LIVE_SCENARIO, _LIVE_DATASET, "anthropic"
-    if os.environ.get("OPENAI_API_KEY"):
-        return _OPENAI_AGENT, _LIVE_SCENARIO, _LIVE_DATASET, "openai"
-    return _STUB_AGENT, _STUB_SCENARIO, "", ""
-
-
-_ANTHROPIC_AGENT = """\
-from kensa import instrument
-
-instrument()
-
-import sys
-
-import anthropic
-
-SYSTEM = (
-    "You are a support ticket triage agent. Given a customer message, classify "
-    "its priority as exactly one of: P1, P2, or P3.\\n\\n"
-    "P1 = service outage or data loss affecting multiple users\\n"
-    "P2 = degraded functionality or bug blocking a single user's workflow\\n"
-    "P3 = cosmetic issue, feature request, or general question\\n\\n"
-    "Classify based on actual business impact, not the customer's tone or "
-    "self-declared urgency. Output only the label (P1, P2, or P3), nothing else."
-)
-
-client = anthropic.Anthropic()
-response = client.messages.create(
-    model="claude-haiku-4-5",
-    max_tokens=16,
-    system=SYSTEM,
-    messages=[{"role": "user", "content": sys.argv[1]}],
-)
-print(response.content[0].text)
-"""
-
-_OPENAI_AGENT = """\
-from kensa import instrument
-
-instrument()
-
-import sys
-
-import openai
-
-SYSTEM = (
-    "You are a support ticket triage agent. Given a customer message, classify "
-    "its priority as exactly one of: P1, P2, or P3.\\n\\n"
-    "P1 = service outage or data loss affecting multiple users\\n"
-    "P2 = degraded functionality or bug blocking a single user's workflow\\n"
-    "P3 = cosmetic issue, feature request, or general question\\n\\n"
-    "Classify based on actual business impact, not the customer's tone or "
-    "self-declared urgency. Output only the label (P1, P2, or P3), nothing else."
-)
-
-client = openai.OpenAI()
-response = client.chat.completions.create(
-    model="gpt-5.4-mini",
-    max_tokens=16,
-    messages=[
-        {"role": "system", "content": SYSTEM},
-        {"role": "user", "content": sys.argv[1]},
-    ],
-)
-print(response.choices[0].message.content)
-"""
-
-_STUB_AGENT = """\
-# Add these two lines to your real agent (before SDK imports):
-# from kensa import instrument
-# instrument()
-
-import sys
-
-message = sys.argv[1] if len(sys.argv) > 1 else ""
-# Stub: always outputs P2. Replace with your real agent logic.
-print("P2")
-"""
-
-_LIVE_DATASET = (
-    '{"ticket": "Our entire team can\'t log in — SSO returns'
-    " 502. We're completely blocked since 7am.\""
-    ', "expected": "P1"}\n'
-    '{"ticket": "Would be great if the dashboard had dark'
-    ' mode. Not urgent, just a nice-to-have."'
-    ', "expected": "P3"}\n'
-    '{"ticket": "PDF exports render charts without axis'
-    " labels since last Tuesday's update.\""
-    ', "expected": "P2"}\n'
-    '{"ticket": "URGENT!!! CRITICAL!!! Change my invoice'
-    ' font to Arial. BLOCKING my entire business!!!"'
-    ', "expected": "P3"}\n'
-    '{"ticket": "A few users are seeing stale numbers on'
-    " the dashboard — totals don't match the API."
-    " Started after this morning's deploy.\""
-    ', "expected": "P1"}\n'
-    '{"ticket": "The export button is broken (just spins),'
-    " the logo on reports looks pixelated, and we're"
-    ' being billed for 50 seats but only have 30."'
-    ', "expected": "P2"}\n'
-)
-
-_LIVE_SCENARIO = """\
-# Example scenario — edit this for your agent.
-# Full reference: https://github.com/satyaborg/kensa/blob/main/README.md
-
-id: example
-name: Support ticket triage
-description: Classify support tickets by priority based on business impact.
-source: user
-
-dataset: example.jsonl
-input_field: ticket
-
-run_command: [python, .kensa/agents/example.py]
-
-expected_outcome: Agent assigns the correct priority label for each ticket.
-
-checks:
-  - type: output_matches
-    params: { pattern: "^P[123]$" }
-    description: Output must be exactly P1, P2, or P3.
-  - type: max_cost
-    params: { max_usd: 0.05 }
-    description: Each classification should cost less than $0.05.
-
-criteria: |
-  The agent must assign priority based on actual business impact:
-  - P1 for outages or data loss affecting multiple users
-  - P2 for bugs blocking a single user's workflow
-  - P3 for cosmetic issues, feature requests, or general questions
-  Ignore the customer's tone or self-declared urgency.
-"""
-
-_STUB_SCENARIO = """\
-# Example scenario — edit this for your agent.
-# Full reference: https://github.com/satyaborg/kensa/blob/main/README.md
-#
-# NOTE: No API key detected. This is a stub that won't produce traces.
-# Set ANTHROPIC_API_KEY or OPENAI_API_KEY, then re-run: kensa init --force
-
-id: example
-name: Support ticket triage
-description: Classify a support ticket by priority.
-source: user
-
-input: "When I export a report to PDF the charts render without axis labels."
-
-run_command: [python, .kensa/agents/example.py]
-
-expected_outcome: Agent outputs the correct priority label (P2).
-
-checks:
-  - type: output_matches
-    params: { pattern: "^P[123]$" }
-    description: Output must be exactly P1, P2, or P3.
-"""
-
-
 @cli.command()
 def doctor() -> None:
     """Verify your setup is ready to run."""
@@ -764,6 +582,30 @@ def doctor() -> None:
     any_api = any(ok for _, ok in api_checks)
     if hard_fails or not any_api:
         sys.exit(1)
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  kensa mcp
+  kensa mcp --http --port 8765""",
+)
+@click.option("--http", "use_http", is_flag=True, help="Use HTTP transport instead of stdio.")
+@click.option("--host", default="127.0.0.1", show_default=True, help="HTTP host (with --http).")
+@click.option("--port", default=8765, show_default=True, type=int, help="HTTP port (with --http).")
+def mcp(use_http: bool, host: str, port: int) -> None:
+    """Run the kensa MCP server for LLM clients."""
+    try:
+        from kensa.mcp_server import run_server
+    except ImportError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+
+    transport = "http" if use_http else "stdio"
+    if use_http:
+        # stdio must keep stdout clean for the protocol; chatty output is fine for HTTP.
+        click.echo(f"kensa MCP server → http://{host}:{port}", err=True)
+    run_server(transport=transport, host=host, port=port)
 
 
 if __name__ == "__main__":
