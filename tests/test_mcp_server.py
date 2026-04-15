@@ -15,9 +15,6 @@ from pathlib import Path
 
 import pytest
 
-# Skip the entire module when the optional `mcp` extra isn't installed —
-# keeps local `pytest` runs clean for contributors who haven't installed
-# fastmcp. CI installs the extra so the tests always run there.
 pytest.importorskip("fastmcp")
 
 import yaml
@@ -66,11 +63,6 @@ EXPECTED_TEMPLATES = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
 def _isolated(tmp_path: Path):
     """Fresh cwd inside tmp_path — paths.* all resolve relative to this."""
     return CliRunner().isolated_filesystem(temp_dir=tmp_path)
@@ -109,11 +101,6 @@ def _write_manifest(run_id: str, scenario_ids: list[str] | None = None) -> Path:
     path = run_dir / f"{run_id}.json"
     path.write_text(manifest.model_dump_json())
     return path
-
-
-# ---------------------------------------------------------------------------
-# Surface
-# ---------------------------------------------------------------------------
 
 
 class TestSurface:
@@ -159,11 +146,6 @@ class TestHelpers:
             1,
             1,
         )
-
-
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
 
 
 class TestInit:
@@ -265,9 +247,8 @@ class TestEval:
         with _isolated(tmp_path):
             scenarios = Path("scenarios")
             _write_scenario(scenarios, "s1", criteria="must pass")
-            Path(".env").write_text("")  # block dotenv walk-up leaking real keys
+            Path(".env").write_text("")
             out = asyncio.run(eval(scenario_dir=str(scenarios)))
-        # Env may still leak in some test runners; accept either code.
         if isinstance(out, MCPError):
             assert out.code in {"no_judge_key", "internal"}
 
@@ -320,11 +301,6 @@ class TestAnalyze:
         assert out.trace_count == 0
 
 
-# ---------------------------------------------------------------------------
-# Resources
-# ---------------------------------------------------------------------------
-
-
 class TestRunsResource:
     def test_empty(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):
@@ -353,7 +329,7 @@ class TestRunDetailResource:
             detail = run_detail("r1")
         assert detail.run_id == "r1"
         assert detail.manifest.run_id == "r1"
-        assert detail.summary is None  # no results yet
+        assert detail.summary is None
 
 
 class TestRunResultsResource:
@@ -399,7 +375,7 @@ class TestRunTraceResource:
         with _isolated(tmp_path):
             _write_manifest("r1", ["s1"])
             out = run_trace("r1", "s1")
-        assert out == []  # empty trace file
+        assert out == []
 
 
 class TestScenariosResource:
@@ -454,11 +430,6 @@ class TestJudgeDetailResource:
             judge_detail("ghost")
 
 
-# ---------------------------------------------------------------------------
-# Transport + CLI
-# ---------------------------------------------------------------------------
-
-
 class TestRunServer:
     def test_rejects_unknown_transport(self) -> None:
         with pytest.raises(ToolError):
@@ -486,11 +457,6 @@ class TestMainEntryPoint:
         assert called == {"transport": "http", "host": "127.0.0.1", "port": 9000}
 
 
-# ---------------------------------------------------------------------------
-# Integration — in-memory fastmcp.Client round-trip
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.integration
 class TestIntegration:
     def test_full_protocol_roundtrip(self, tmp_path: Path) -> None:
@@ -508,18 +474,15 @@ class TestIntegration:
                 templates = await client.list_resource_templates()
                 assert {t.uriTemplate for t in templates} == EXPECTED_TEMPLATES
 
-                # Call doctor — FastMCP returns the structured output as a dataclass.
                 result = await client.call_tool("doctor", {})
                 dumped = dataclasses.asdict(result.data)
                 assert "ready" in dumped
                 assert "checks" in dumped
 
-                # Error path: MCPError envelope comes back with the stable `code`.
                 err = await client.call_tool("run", {"scenario_dir": "/does/not/exist"})
                 err_data = dataclasses.asdict(err.data)
                 assert err_data.get("code") == "scenarios_missing"
 
-                # Read a list resource.
                 scenarios_res = await client.read_resource("kensa://scenarios")
                 assert scenarios_res[0].text in ("[]", "null")
 

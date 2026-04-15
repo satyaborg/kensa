@@ -82,11 +82,6 @@ def init_kensa(blank: bool = False, force: bool = False) -> InitResult:
     )
 
 
-# ---------------------------------------------------------------------------
-# Templates (were previously inlined in cli.py)
-# ---------------------------------------------------------------------------
-
-
 _ANTHROPIC_AGENT = """\
 from kensa import instrument
 

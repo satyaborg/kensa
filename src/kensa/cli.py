@@ -603,7 +603,6 @@ def mcp(use_http: bool, host: str, port: int) -> None:
 
     transport = "http" if use_http else "stdio"
     if use_http:
-        # stdio must keep stdout clean for the protocol; chatty output is fine for HTTP.
         click.echo(f"kensa MCP server → http://{host}:{port}", err=True)
     run_server(transport=transport, host=host, port=port)
 

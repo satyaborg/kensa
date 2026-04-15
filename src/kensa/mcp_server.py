@@ -32,7 +32,7 @@ from pydantic import BaseModel, Field
 try:
     from fastmcp import Context, FastMCP
     from fastmcp.exceptions import ResourceError, ToolError
-except ImportError as exc:  # pragma: no cover - surfaced via CLI hint
+except ImportError as exc:  # pragma: no cover
     raise ImportError(
         "The kensa MCP server requires the 'mcp' extra.\n"
         "Install with: uv add kensa[mcp]  (or pip install 'kensa[mcp]')"
@@ -61,10 +61,6 @@ from kensa.paths import (
     results_path,
 )
 
-# ---------------------------------------------------------------------------
-# Error envelope
-# ---------------------------------------------------------------------------
-
 ErrorCode = Literal[
     "scenarios_missing",
     "run_not_found",
@@ -83,11 +79,6 @@ class MCPError(BaseModel):
     error: str
     code: ErrorCode
     hint: str | None = None
-
-
-# ---------------------------------------------------------------------------
-# Tool response models
-# ---------------------------------------------------------------------------
 
 
 class InitResponse(BaseModel):
@@ -156,11 +147,6 @@ class ReportResponse(BaseModel):
     passed: int
 
 
-# ---------------------------------------------------------------------------
-# Resource response models
-# ---------------------------------------------------------------------------
-
-
 class ScenarioListItem(BaseModel):
     id: str
     name: str
@@ -186,10 +172,6 @@ class RunDetail(BaseModel):
     summary: JudgeSummary | None = None
 
 
-# ---------------------------------------------------------------------------
-# Server
-# ---------------------------------------------------------------------------
-
 _INSTRUCTIONS = """\
 kensa is an open-source agent evals harness. Tools run the workflow (init,
 doctor, run, judge, eval, report, analyze); resources expose run artefacts
@@ -198,11 +180,6 @@ root containing the .kensa/ directory.
 """
 
 mcp: FastMCP = FastMCP(name="kensa", instructions=_INSTRUCTIONS, version=__version__)
-
-
-# ---------------------------------------------------------------------------
-# Internals
-# ---------------------------------------------------------------------------
 
 
 def _validate_run_id(run_id: str) -> bool:
@@ -299,11 +276,6 @@ def _progress_bridge(ctx: Context | None, loop: asyncio.AbstractEventLoop) -> tu
         )
 
     return on_run, on_judge
-
-
-# ---------------------------------------------------------------------------
-# Tools
-# ---------------------------------------------------------------------------
 
 
 @mcp.tool
@@ -590,11 +562,6 @@ def analyze(trace_dir: str = str(TRACE_DIR)) -> Analysis:
     return analyze_traces(trace_dir=trace_dir)
 
 
-# ---------------------------------------------------------------------------
-# Resources
-# ---------------------------------------------------------------------------
-
-
 @mcp.resource("kensa://runs")
 def runs_list() -> list[RunListItem]:
     """List the most recent runs (newest first, up to 50)."""
@@ -685,12 +652,10 @@ def run_trace(run_id: str, scenario: str) -> list[Span]:
     if not runs:
         raise ResourceError(f"Scenario {scenario!r} not in run {run_id}")
 
-    # Use the first run's trace (dataset scenarios may have many; v1 returns the first).
     sr = runs[0]
     if not sr.trace_path:
         raise ResourceError(f"No trace captured for {scenario} in run {run_id}")
 
-    # Path escape guard: the trace_path must live under TRACE_DIR.
     resolved = Path(sr.trace_path).resolve()
     trace_root = TRACE_DIR.resolve()
     if not resolved.is_relative_to(trace_root):
@@ -758,11 +723,6 @@ def judge_detail(name: str) -> JudgePromptSpec:
         return load_judge_prompt_spec(name)
     except FileNotFoundError as e:
         raise ResourceError(f"Judge not found: {name}") from e
-
-
-# ---------------------------------------------------------------------------
-# Transport
-# ---------------------------------------------------------------------------
 
 
 def run_server(
