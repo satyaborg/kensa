@@ -9,6 +9,7 @@ from __future__ import annotations
 import functools
 import json
 import os
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
 
@@ -256,7 +257,6 @@ def _parse_judge_response(text: str) -> JudgeResult:
                 evidence=evidence,
             )
 
-        # Legacy fallback: "passed" bool
         passed = bool(data.get("passed", False))
         return JudgeResult(
             passed=passed,
@@ -509,6 +509,7 @@ def judge_manifest(
     manifest: RunManifest,
     judge_provider: JudgeProvider | None,
     scenario_dir: str | Path,
+    on_progress: Callable[[int, int], None] | None = None,
 ) -> tuple[list[Result], list[str]]:
     """Judge all scenarios in a manifest.
 
@@ -516,7 +517,7 @@ def judge_manifest(
     judged independently in parallel. Returns (results, skipped) where
     skipped contains scenario IDs that were skipped with a reason string.
     """
-    from concurrent.futures import Future, ThreadPoolExecutor
+    from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 
     from kensa.runner import read_trace
 
@@ -571,6 +572,11 @@ def judge_manifest(
                         dataset_row=sr.dataset_row,
                     )
                 )
+
+    if on_progress and futures:
+        on_progress(0, len(futures))
+        for completed, _ in enumerate(as_completed(futures), 1):
+            on_progress(completed, len(futures))
 
     results = [f.result() for f in futures]
 

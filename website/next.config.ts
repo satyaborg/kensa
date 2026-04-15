@@ -1,8 +1,8 @@
-import { createMDX } from 'fumadocs-mdx/next';
-import type { NextConfig } from 'next';
+import { createMDX } from "fumadocs-mdx/next";
+import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  output: 'export',
+  output: "export",
   images: { unoptimized: true },
 };
 

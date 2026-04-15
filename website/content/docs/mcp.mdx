@@ -1,0 +1,127 @@
+---
+title: MCP Server
+description: Serve kensa over the Model Context Protocol to any MCP-aware client.
+---
+
+Kensa ships an MCP server that exposes the eval workflow to any Model Context Protocol client — Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop, anything that speaks MCP. Tools are thin adapters over the same CLI surface, so `mcp.call_tool("eval")` runs the same pipeline as `kensa eval`.
+
+## Connect your MCP client
+
+### Quick install (Claude Code)
+
+Run this from your project root:
+
+```bash
+claude mcp add kensa -- uvx kensa-mcp
+```
+
+`uvx` pulls [`kensa-mcp`](https://pypi.org/project/kensa-mcp/) from PyPI into an isolated environment on first launch and reuses it afterward. Nothing to pre-install. The server inherits cwd from Claude Code and reads `.kensa/` relative to that directory, so always invoke `claude mcp add` from the repo that contains your scenarios.
+
+### Manual JSON config
+
+For Cursor, Codex, Claude Desktop, and other MCP clients, add this to the client config (e.g. `~/.claude.json` or a project-local `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uvx",
+      "args": ["kensa-mcp"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+If your project already depends on kensa, skip the shim and use the built-in `kensa mcp` subcommand — it matches the version you have installed:
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+This requires the `mcp` extra (`uv add "kensa[mcp]"`). Without it, `kensa mcp` prints a one-line install hint.
+
+### Source checkout (kensa contributors)
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/kensa"
+    }
+  }
+}
+```
+
+## Verify manually
+
+The MCP client starts the stdio server for you. Run it manually only to verify setup or use HTTP mode:
+
+```bash
+uvx kensa-mcp                       # stdio transport (default)
+uvx kensa-mcp --http --port 8765    # streamable HTTP, localhost-only
+kensa mcp                           # same server, via the CLI subcommand (needs kensa[mcp])
+```
+
+HTTP binds to `127.0.0.1` by default. Do not expose the HTTP transport on a public interface without a bearer token in front — the `run` and `eval` tools execute subprocesses with no auth of their own.
+
+## Tools
+
+| Tool | Purpose | Returns |
+|---|---|---|
+| `init` | Scaffold `.kensa/` (idempotent) | `InitResponse` or `MCPError` |
+| `doctor` | Pre-flight diagnostics | `DoctorResponse` with `ready` flag |
+| `run` | Execute scenarios, capture traces | `RunSummary` with `manifest_uri` |
+| `judge` | Score a run (checks + LLM judge) | `JudgeSummary` with `results_uri` |
+| `eval` | `run` + `judge` + HTML report | `EvalSummary` with `results_uri` |
+| `report` | Render results in a chosen format | `ReportResponse` |
+| `analyze` | Cost/latency stats + anomaly flags | `Analysis` |
+
+Long-running tools (`run`, `judge`, `eval`) report progress over `ctx.report_progress` when the client provides a `Context`, and return a compact summary plus a resource URI pointing at full detail — fetch the resource only when you need it.
+
+## Resources
+
+Read-only data under the `kensa://` namespace.
+
+| URI | What it returns |
+|---|---|
+| `kensa://runs` | List of the 50 most recent runs (newest first) |
+| `kensa://runs/{run_id}` | Manifest plus summary for one run |
+| `kensa://runs/{run_id}/results` | Full judged results for one run |
+| `kensa://runs/{run_id}/trace/{scenario}/{index}` | Spans for one scenario execution (`index` is 0-based; dataset-backed scenarios produce one entry per row) |
+| `kensa://scenarios` | List of scenarios in `.kensa/scenarios/` |
+| `kensa://scenarios/{id}` | Full scenario definition |
+| `kensa://judges` | Names of structured judge prompt specs |
+| `kensa://judges/{name}` | A single `JudgePromptSpec` |
+
+## Errors
+
+Tools never raise across the protocol boundary. Failures return a stable envelope:
+
+```json
+{
+  "error": "Scenario directory not found: .kensa/scenarios",
+  "code": "scenarios_missing",
+  "hint": "Create scenarios in: .kensa/scenarios/"
+}
+```
+
+| `code` | When |
+|---|---|
+| `scenarios_missing` | Scenario directory does not exist |
+| `scenario_not_found` | Requested scenario ID not in the directory |
+| `scenario_invalid` | YAML syntax or schema error in a scenario file |
+| `run_not_found` | Referenced run has no manifest on disk |
+| `no_judge_key` | No judge API key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) set |
+| `invalid_run_id` | `run_id` failed path-safety validation |
+| `internal` | Uncategorised failure — surface the message to the user |

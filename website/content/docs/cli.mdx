@@ -143,6 +143,26 @@ Checks:
 - SDK instrumentation (scans agent scripts for openai/anthropic/langchain imports, verifies instrumentor packages)
 - Judge provider instantiation
 
+## kensa mcp
+
+Serve kensa over the Model Context Protocol for LLM clients (Claude Code, Cursor, Codex, Claude Desktop, etc.). Requires the `mcp` extra.
+
+```bash
+uv add "kensa[mcp]"
+uv run kensa mcp                       # stdio transport (default)
+uv run kensa mcp --http --port 8765    # streamable HTTP, localhost-only
+```
+
+For a zero-install launcher (no `uv add` needed), use the `kensa-mcp` shim package: `uvx kensa-mcp`.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--http` | off | Use HTTP transport instead of stdio |
+| `--host` | `127.0.0.1` | HTTP host (with `--http`) |
+| `--port` | `8765` | HTTP port (with `--http`) |
+
+Exposes 7 tools (`init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`) and 8 resources under the `kensa://` namespace. See [MCP server](/docs/mcp) for the full reference.
+
 ## Environment variables
 
 | Variable | Purpose |

@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { InstallTabs } from "@/components/InstallTabs";
 import { LandingPageDemo } from "@/components/LandingPageDemo";
 import { LandingPageNav } from "@/components/LandingPageNav";
@@ -29,32 +30,22 @@ const features = [
   {
     num: "01",
     title: "Zero to eval",
-    desc: "The coding agent bootstraps your evals to solve the cold-start problem. You review, not scaffold.",
+    desc: "Ask your coding agent to inspect the codebase and draft the first scenarios. You review evals instead of starting from a blank file.",
   },
   {
     num: "02",
-    title: "Checks gate the judge",
-    desc: "Deterministic checks run before the LLM judge. If a check fails, no tokens are spent.",
+    title: "Runs become traces",
+    desc: "Kensa captures LLM calls, tool use, tokens, cost, and latency while your agent runs each scenario.",
   },
   {
     num: "03",
-    title: "Trace everything",
-    desc: "Auto-instruments Anthropic, OpenAI, and LangChain via OpenTelemetry (OTel).",
+    title: "Checks gate judges",
+    desc: "Assertions run before LLM judges, catching obvious regressions without spending tokens.",
   },
   {
     num: "04",
-    title: "Dataset-driven evals",
-    desc: "Point at a JSONL file, each row becomes a run with its own trace and verdict. Re-run for variance stats, flaky detection, and anomaly flagging.",
-  },
-  {
-    num: "05",
-    title: "Structured judges",
-    desc: "Define judge criteria in YAML with pass/fail definitions and few-shot examples. Reuse specs across scenarios for consistent grading.",
-  },
-  {
-    num: "06",
-    title: "No platform",
-    desc: "uv or pip install, BYO API keys, all data stays local. Same CLI on your laptop and in CI.",
+    title: "Ship with evidence",
+    desc: "Get verdicts, traces, cost, latency, and failure details in terminal, Markdown, JSON, or HTML.",
   },
 ];
 
@@ -70,6 +61,10 @@ const faqs = [
   {
     q: "Can I run kensa in CI?",
     a: "Yes. `kensa eval --format markdown` is all you need. Deterministic checks need no API keys. Add judge keys as secrets for LLM-judged criteria.",
+  },
+  {
+    q: "Can I drive kensa from an MCP client?",
+    a: "Yes. In Claude Code, `claude mcp add kensa -- uvx kensa-mcp` registers the stdio server — uvx fetches the `kensa-mcp` package from PyPI on first run, no pre-install needed. Every CLI action is a tool, and runs, scenarios, and judges are readable as resources under `kensa://`.",
   },
   {
     q: "Is kensa free?",
@@ -108,6 +103,7 @@ const cliCommands = [
   { cmd: "kensa report", desc: "Terminal, markdown, JSON, or HTML output" },
   { cmd: "kensa analyze", desc: "Cost/latency stats + anomaly flagging" },
   { cmd: "kensa doctor", desc: "Pre-flight environment checks" },
+  { cmd: "kensa mcp", desc: "Serve kensa over MCP for LLM clients" },
 ];
 
 const logos = [
@@ -162,17 +158,19 @@ export function LandingPage() {
       <section className="a-hero">
         <div className="a-hero-inner">
           <div className="a-hero-copy">
-            <h1 className="a-hero-title">
-              The open source agent evals harness
-            </h1>
+            <Link href="/docs/mcp" className="a-badge">
+              <span className="a-badge-tag">NEW</span>
+              MCP server available
+            </Link>
+            <h1 className="a-hero-title">Agent evals from zero to trusted.</h1>
             <p className="a-hook">
-              Tell your coding agent to evaluate an agent and get a working
-              eval suite in minutes. No platform needed.
+              Your coding agent drafts evals. You approve. Kensa instruments
+              and runs them.
             </p>
             <InstallTabs />
 
             <div className="a-logos-inline">
-              <span className="a-logos-label">Works with</span>
+              <span className="a-logos-label">Works with coding agents</span>
               <div className="a-logos-row">
                 {logos.map((l) => (
                   <span
@@ -198,10 +196,8 @@ export function LandingPage() {
           <div className="a-section-header">
             <h2 className="a-section-title">How it works</h2>
             <p className="a-section-lead">
-              Your coding agent reasons: it reads your codebase, identifies
-              failure modes from traces, and writes scenarios. The CLI computes:
-              it instruments, executes, judges, and reports. Skills orchestrate
-              the workflow between them.
+              Kensa turns agent behavior into repeatable evals: scenarios in,
+              traces captured, checks run, reports out.
             </p>
           </div>
 
@@ -214,14 +210,19 @@ export function LandingPage() {
               </div>
             ))}
           </div>
+
+          <p className="a-features-outro">
+            Each run leaves traces your coding agent can turn into sharper
+            scenarios.
+          </p>
         </section>
 
         <section className="a-section" id="skills">
           <div className="a-section-header">
             <h2 className="a-section-title">Skills</h2>
             <p className="a-section-lead">
-              Five skills take you from zero to eval, or from traces to targeted
-              iteration.
+              {skills.length} skills take you from zero to eval, or from traces
+              to targeted iteration.
             </p>
           </div>
           <div className="a-skills">
@@ -243,7 +244,10 @@ export function LandingPage() {
         <section className="a-section a-section--solid" id="cli">
           <div className="a-section-header">
             <h2 className="a-section-title">
-              CLI <span className="a-badge">Python 3.10+</span>
+              CLI{" "}
+              <span className="a-badge">
+                <span className="a-badge-tag">PY</span>3.10+
+              </span>
             </h2>
             <p className="a-section-lead">
               Works standalone for CI and local iteration. Checks run before the
@@ -281,12 +285,14 @@ export function LandingPage() {
             <p className="a-footer-etymology">
               <span className="a-footer-reading">/ken·sa/</span>{" "}
               <span className="a-footer-def">
-                — to inspect before releasing to the world.
+                to inspect before releasing to the world.
               </span>
             </p>
           </div>
           <div className="a-footer-links">
-            <a href="/llms.txt" target="_blank" rel="noopener noreferrer">llms.txt</a>
+            <a href="/llms.txt" target="_blank" rel="noopener noreferrer">
+              llms.txt
+            </a>
             <a href="https://discord.gg/n77EqxUH">Discord</a>
             <a href="https://x.com/kensa_sh">X</a>
           </div>

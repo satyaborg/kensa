@@ -60,8 +60,10 @@ git checkout -b "$RELEASE_BRANCH"
 
 # ── Update version strings ───────────────────────────────────────────
 sed -i '' "s/^version = \"${CURRENT}\"/version = \"${NEXT}\"/" pyproject.toml
+sed -i '' "s/^version = \"${CURRENT}\"/version = \"${NEXT}\"/" packages/kensa-mcp/pyproject.toml
+sed -i '' "s/kensa\[mcp\]==${CURRENT}/kensa[mcp]==${NEXT}/" packages/kensa-mcp/pyproject.toml
 
-# ── Verify the update worked ─────────────────────────────────────────
+# ── Verify the updates worked ────────────────────────────────────────
 VERIFY="$(python3 -c "
 import tomllib, pathlib
 cfg = tomllib.loads(pathlib.Path('pyproject.toml').read_text())
@@ -69,12 +71,22 @@ print(cfg['project']['version'])
 ")"
 [[ "$VERIFY" == "$NEXT" ]] || die "pyproject.toml update failed (got $VERIFY)"
 
+SHIM_VERIFY="$(python3 -c "
+import tomllib, pathlib
+cfg = tomllib.loads(pathlib.Path('packages/kensa-mcp/pyproject.toml').read_text())
+print(cfg['project']['version'])
+")"
+[[ "$SHIM_VERIFY" == "$NEXT" ]] || die "shim pyproject.toml update failed (got $SHIM_VERIFY)"
+
+SHIM_PIN="$(grep -oE 'kensa\[mcp\]==[0-9][^"]*' packages/kensa-mcp/pyproject.toml | sed 's/.*==//')"
+[[ "$SHIM_PIN" == "$NEXT" ]] || die "shim dep pin update failed (got $SHIM_PIN)"
+
 # ── Generate changelog ───────────────────────────────────────────────
 info "generating changelog"
 git-cliff --tag "$TAG" -o CHANGELOG.md
 
 # ── Commit and open PR ───────────────────────────────────────────────
-git add pyproject.toml CHANGELOG.md
+git add pyproject.toml packages/kensa-mcp/pyproject.toml CHANGELOG.md
 git commit -m "chore: release ${TAG}"
 git push -u origin "$RELEASE_BRANCH"
 

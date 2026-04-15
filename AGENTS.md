@@ -40,6 +40,12 @@ kensa report --format html                               # standalone HTML file
 kensa eval                                               # run + judge + report in one shot
 kensa eval -s <name>                                     # eval specific scenario
 kensa analyze                                            # cost/latency stats + anomaly flags
+kensa mcp                                                # serve kensa over MCP (stdio transport)
+kensa mcp --http --port 8765                             # MCP over HTTP on localhost
+
+# Build (both packages)
+uv build                                                 # kensa sdist + wheel → dist/
+cd packages/kensa-mcp && uv build                        # kensa-mcp shim sdist + wheel → packages/kensa-mcp/dist/
 ```
 
 ## Architecture
@@ -74,7 +80,10 @@ judge.py           ← models + checks + utils + paths (lazy: runner)
 runner.py          ← models + paths + translate
 doctor.py          ← paths + utils (lazy: runner, styles)
 exporter.py        ← stdlib + opentelemetry only (JSONL span exporter, no kensa imports)
-cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor)
+scaffold.py        ← paths only (idempotent .kensa/ scaffolding, shared by CLI and MCP)
+mcp_server.py      ← models + paths (lazy: runner, judge, report, analyzer, doctor, scaffold)
+_mcp_launcher.py   ← stdlib only (clean install-hint wrapper around mcp_server.main; consumed by the kensa-mcp shim package)
+cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server)
 ```
 
 No circular deps. `models.py` is imported by everything. `utils.py` is the most shared utility (checks, judge, analyzer, doctor).
@@ -84,6 +93,10 @@ No circular deps. `models.py` is imported by everything. `utils.py` is the most 
 `skills/` contains five Claude Code skills that orchestrate the eval workflow. Each skill has its own `SKILL.md` with instructions and references. The skills are: `generate-scenarios`, `generate-judges`, `diagnose-errors`, `audit-evals`, and `validate-judge`. These are what run when a user says "evaluate my agent", they use the CLI commands above under the hood.
 
 Read `skills/evals-directive.md` before creating or modifying any skill.
+
+### MCP server
+
+`mcp_server.py` exposes the eval workflow over the Model Context Protocol as 7 tools (`init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`) and 8 resources under `kensa://`. Tools are thin adapters over `runner`, `judge`, `report`, `analyzer`, and `scaffold` — no business logic lives here. Failures come back as a stable `MCPError(error, code, hint)` envelope instead of raising across the protocol boundary. The base package exposes the server via the `kensa mcp` CLI subcommand (requires the `mcp` extra: `uv add kensa[mcp]`). A separate `kensa-mcp` PyPI shim at `packages/kensa-mcp/` depends on `kensa[mcp]` pinned to the same version and registers a `kensa-mcp` console script pointing at `_mcp_launcher.py` — this is what makes `uvx kensa-mcp` work. The launcher prints a clean install hint instead of a two-level import traceback when `fastmcp` is missing.
 
 ### Key design patterns
 

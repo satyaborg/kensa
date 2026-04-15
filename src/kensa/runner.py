@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 import time
+from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,7 +20,15 @@ from kensa.translate import oi_to_kensa
 
 DEFAULT_TIMEOUT = 300
 
-# Env vars that scenario overrides must never replace.
+
+class ScenarioNotFoundError(ValueError):
+    """Raised when one or more requested scenario IDs are not present."""
+
+    def __init__(self, missing: set[str]) -> None:
+        self.missing = missing
+        super().__init__(f"Scenarios not found: {sorted(missing)}")
+
+
 _PROTECTED_ENV_VARS: frozenset[str] = frozenset(
     {
         "KENSA_TRACE_DIR",
@@ -124,8 +133,7 @@ def load_scenarios(
 
     if scenario_ids and len(scenarios) != len(scenario_ids):
         found = {s.id for s in scenarios}
-        missing = set(scenario_ids) - found
-        raise ValueError(f"Scenarios not found: {missing}")
+        raise ScenarioNotFoundError(set(scenario_ids) - found)
 
     return scenarios
 
@@ -290,22 +298,20 @@ def run_scenarios(
     trace_dir: str = str(TRACE_DIR),
     timeout: int = DEFAULT_TIMEOUT,
     scenarios: list[Scenario] | None = None,
+    on_progress: Callable[[int, int, str], None] | None = None,
 ) -> RunManifest:
-    """Run all scenarios (or filtered subset) and return a manifest.
-
-    Continues on individual scenario failure so partial results are available.
-    Failed scenarios get exit_code=-1 and the error in stderr.
-
-    Pass pre-loaded ``scenarios`` to skip the redundant ``load_scenarios`` call.
-    """
+    """Run all scenarios (or filtered subset) and return a manifest."""
     if scenarios is None:
         scenarios = load_scenarios(scenario_dir, scenario_ids)
     timestamp = datetime.now(tz=timezone.utc)
     run_id = timestamp.strftime("%Y%m%dT%H%M%S%f")[:18]
 
     manifest = RunManifest(run_id=run_id, timestamp=timestamp)
+    total = len(scenarios)
 
-    for scenario in scenarios:
+    for idx, scenario in enumerate(scenarios, 1):
+        if on_progress:
+            on_progress(idx, total, scenario.id)
         if scenario.dataset and scenario.input_field:
             rows = load_dataset(Path(scenario_dir), scenario.dataset)
             runs: list[ScenarioRun] = []

@@ -89,6 +89,91 @@ uv add "kensa[all]"
 | `kensa eval` | Run + judge + report in one command |
 | `kensa report` | Show the latest results in terminal, Markdown, JSON, or HTML |
 | `kensa analyze` | Flag slow, expensive, anomalous, or error-prone traces |
+| `kensa mcp` | Serve kensa over MCP for LLM clients (stdio or HTTP) |
+
+## MCP server
+
+Kensa ships an MCP server that exposes the eval workflow to any MCP-aware
+client — Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop,
+anything that speaks MCP.
+
+One-liner for Claude Code (run from your project root):
+
+```bash
+claude mcp add kensa -- uvx kensa-mcp
+```
+
+`uvx` pulls [`kensa-mcp`](https://pypi.org/project/kensa-mcp/) from PyPI into
+an isolated environment on first launch. No pre-install needed. The server
+reads `.kensa/` relative to the cwd it inherits from Claude Code.
+
+**Tools (7):** `init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`.
+
+**Resources (8):** read-only data under the `kensa://` namespace.
+
+```
+kensa://runs                          # list of recent runs
+kensa://runs/{id}                     # manifest + summary for one run
+kensa://runs/{id}/results             # full judged results
+kensa://runs/{id}/trace/{scenario}/{index}  # spans for one scenario execution
+kensa://scenarios                     # list of scenarios
+kensa://scenarios/{id}                # full scenario YAML
+kensa://judges                        # list of judge prompt names
+kensa://judges/{name}                 # judge prompt spec
+```
+
+Long-running tools (`run`, `judge`, `eval`) return a compact summary plus
+a `results_uri` — fetch detail via the resource only when you need it.
+Errors come back as a typed `MCPError` envelope (`{error, code, hint}`) with
+stable `code` values so clients can branch on failure type.
+
+<details>
+<summary>Manual config (Cursor, Codex, Claude Desktop, etc.)</summary>
+
+Add to your MCP client config (e.g. `~/.claude.json` or a project-local `.mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uvx",
+      "args": ["kensa-mcp"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+Already have kensa installed in the project? Add the extra (`uv add "kensa[mcp]"`)
+and use the built-in `kensa mcp` subcommand instead of the shim:
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+For local Kensa development from a source checkout:
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/kensa"
+    }
+  }
+}
+```
+
+</details>
 
 ## Manual workflow
 

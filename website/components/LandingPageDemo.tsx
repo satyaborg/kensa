@@ -4,7 +4,7 @@ import { useEffect, useRef, useState, type FocusEvent } from "react";
 
 export function LandingPageDemo() {
   const [hovered, setHovered] = useState(false);
-  const [paused, setPaused] = useState(true);
+  const [paused, setPaused] = useState(false);
   const [hasFocusWithin, setHasFocusWithin] = useState(false);
   const [showControlsForTouch, setShowControlsForTouch] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -46,7 +46,10 @@ export function LandingPageDemo() {
         src="/demo.mp4"
         poster="/thumbnail.png"
         controls={showControlsForTouch || hovered || hasFocusWithin}
-        preload="none"
+        preload="metadata"
+        autoPlay
+        muted
+        loop
         playsInline
         onPlay={() => setPaused(false)}
         onPause={() => setPaused(true)}
