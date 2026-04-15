@@ -459,6 +459,40 @@ class TestMainEntryPoint:
         assert called == {"transport": "http", "host": "127.0.0.1", "port": 9000}
 
 
+class TestLauncher:
+    def test_exits_with_hint_when_fastmcp_missing(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The kensa-mcp console script must print a clean install hint on a
+        base install (no ``[mcp]`` extra), not a two-level import traceback."""
+        import sys
+
+        from kensa import _mcp_launcher
+
+        monkeypatch.setitem(sys.modules, "fastmcp", None)
+
+        with pytest.raises(SystemExit) as exc:
+            _mcp_launcher.main()
+
+        assert exc.value.code == 1
+        err = capsys.readouterr().err
+        assert "mcp" in err.lower()
+        assert "install" in err.lower()
+
+    def test_delegates_when_fastmcp_present(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """When fastmcp is importable, the launcher hands off to mcp_server.main."""
+        from kensa import _mcp_launcher
+
+        called: list[bool] = []
+
+        def fake_main() -> None:
+            called.append(True)
+
+        monkeypatch.setattr("kensa.mcp_server.main", fake_main)
+        _mcp_launcher.main()
+        assert called == [True]
+
+
 @pytest.mark.integration
 class TestIntegration:
     def test_full_protocol_roundtrip(self, tmp_path: Path) -> None:
