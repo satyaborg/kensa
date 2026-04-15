@@ -516,9 +516,6 @@ def judge_manifest(
     Each scenario may have multiple runs (list[ScenarioRun]). Each run is
     judged independently in parallel. Returns (results, skipped) where
     skipped contains scenario IDs that were skipped with a reason string.
-
-    ``on_progress(completed, total)`` is invoked as each run finishes; it is
-    optional and used by the MCP server to surface incremental progress.
     """
     from concurrent.futures import Future, ThreadPoolExecutor, as_completed
 

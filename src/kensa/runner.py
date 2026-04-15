@@ -22,12 +22,7 @@ DEFAULT_TIMEOUT = 300
 
 
 class ScenarioNotFoundError(ValueError):
-    """Raised when one or more requested scenario IDs are not present.
-
-    Subclasses :class:`ValueError` so existing callers that catch broad
-    ``ValueError`` continue to work; new callers (the MCP server) catch the
-    specific class so they can map to a distinct error code.
-    """
+    """Raised when one or more requested scenario IDs are not present."""
 
     def __init__(self, missing: set[str]) -> None:
         self.missing = missing
@@ -305,17 +300,7 @@ def run_scenarios(
     scenarios: list[Scenario] | None = None,
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> RunManifest:
-    """Run all scenarios (or filtered subset) and return a manifest.
-
-    Continues on individual scenario failure so partial results are available.
-    Failed scenarios get exit_code=-1 and the error in stderr.
-
-    Pass pre-loaded ``scenarios`` to skip the redundant ``load_scenarios`` call.
-    ``on_progress(current, total, scenario_id)`` is invoked before each scenario
-    starts; it is optional and purely for progress reporting (e.g. from the MCP
-    server). Dataset expansion is not reflected in the tick count — one tick
-    per scenario regardless of row count.
-    """
+    """Run all scenarios (or filtered subset) and return a manifest."""
     if scenarios is None:
         scenarios = load_scenarios(scenario_dir, scenario_ids)
     timestamp = datetime.now(tz=timezone.utc)

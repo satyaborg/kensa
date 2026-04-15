@@ -1,23 +1,4 @@
-"""MCP server exposing kensa to any MCP-speaking client.
-
-Seven tools (``init``, ``doctor``, ``run``, ``judge``, ``eval``, ``report``,
-``analyze``) and eight resources under the ``kensa://`` URI namespace.
-
-The module requires the ``mcp`` extra (``uv add kensa[mcp]``). Import raises a
-helpful ``ImportError`` when ``fastmcp`` is missing so the CLI can surface a
-clean install hint.
-
-Design notes:
-  * Tools are thin adapters over ``runner``, ``judge``, ``report``, ``analyzer``,
-    and ``scaffold``. The MCP layer never duplicates business logic.
-  * Failures flow back as ``MCPError`` with a stable ``code`` field; no raises
-    cross the MCP boundary from a tool.
-  * Long-running tools (``run``, ``judge``, ``eval``) return a compact summary
-    plus a resource URI pointing at the full detail (see ``kensa://runs/...``).
-  * Progress emission on the slow tools uses ``ctx.report_progress`` by
-    bridging kensa's sync callbacks with the event loop via
-    ``asyncio.run_coroutine_threadsafe``.
-"""
+"""MCP server exposing kensa to any consumable client."""
 
 from __future__ import annotations
 
@@ -98,14 +79,7 @@ class DoctorCheck(BaseModel):
 
 
 class DoctorResponse(BaseModel):
-    """Pre-flight readiness report.
-
-    ``ready`` matches the CLI's ``kensa doctor`` semantics: provider-specific
-    API-key checks are soft (at least one API key is required, but missing
-    provider-specific ones do not block). ``hard_failures`` is the
-    subset of ``failures`` that actually gate readiness; clients should prefer
-    it over ``failures`` when deciding whether to proceed.
-    """
+    """Pre-flight readiness report."""
 
     ready: bool
     passed: int

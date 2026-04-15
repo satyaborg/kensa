@@ -1,9 +1,4 @@
-"""Scaffolding logic for ``.kensa/`` — shared between the CLI and MCP server.
-
-The public surface is :func:`init_kensa`, which performs idempotent filesystem
-work and returns a structured :class:`InitResult` describing what happened.
-Callers wrap it with their own UI (rich output for the CLI, JSON for MCP).
-"""
+"""Scaffolding logic for ``.kensa/`` shared between the CLI and MCP server."""
 
 from __future__ import annotations
 
@@ -15,8 +10,6 @@ from kensa.paths import AGENT_DIR, JUDGE_DIR, SCENARIO_DIR, TRACE_DIR
 
 
 class InitResult(BaseModel):
-    """What :func:`init_kensa` did on this invocation."""
-
     directories_created: list[str] = Field(default_factory=list)
     files_written: list[str] = Field(default_factory=list)
     provider: str | None = None
@@ -24,11 +17,7 @@ class InitResult(BaseModel):
 
 
 def pick_templates() -> tuple[str, str, str, str]:
-    """Return ``(agent, scenario, dataset, provider)`` based on available API keys.
-
-    ``provider`` is ``"anthropic"`` / ``"openai"`` for live templates, or ``""``
-    for the stub fallback.
-    """
+    """Return template based on available API keys."""
     from kensa.runner import ensure_dotenv_loaded
 
     ensure_dotenv_loaded()
@@ -40,11 +29,7 @@ def pick_templates() -> tuple[str, str, str, str]:
 
 
 def init_kensa(blank: bool = False, force: bool = False) -> InitResult:
-    """Create the ``.kensa/`` scaffold. Idempotent.
-
-    ``blank=True`` skips the example agent and scenario.
-    ``force=True`` overwrites an existing ``example.yaml``.
-    """
+    """Create the ``.kensa/`` scaffold (idempotent)."""
     dirs = [SCENARIO_DIR, TRACE_DIR, JUDGE_DIR, AGENT_DIR]
     directories_created: list[str] = []
     for d in dirs:

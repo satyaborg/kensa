@@ -1,14 +1,4 @@
-"""Install-hint wrapper around ``kensa.mcp_server.main``.
-
-Kept separate from ``kensa.mcp_server`` so a missing ``fastmcp`` install
-prints a single-line hint instead of a multi-frame import traceback. Consumed
-by the ``kensa-mcp`` PyPI shim package (``packages/kensa-mcp/``), whose
-console script points at :func:`main` here.
-
-The launcher only discriminates the specific failure mode that warrants the
-friendly hint — ``fastmcp`` itself being missing. Any other ImportError from
-``kensa.mcp_server`` is a real bug and propagates untouched.
-"""
+"""Install-hint wrapper around ``kensa.mcp_server.main``."""
 
 from __future__ import annotations
 

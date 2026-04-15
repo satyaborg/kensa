@@ -1,4 +1,4 @@
-"""Kensa: The open source agent evals harness."""
+"""kensa - the open source agent evals harness."""
 
 from importlib.metadata import PackageNotFoundError, version
 
