@@ -191,7 +191,8 @@ class TestRun:
         _write_scenario(scenarios, "a")
         out = asyncio.run(run(scenario_dir=str(scenarios), scenario_ids=["ghost"]))
         assert isinstance(out, MCPError)
-        assert out.code == "invalid_run_id"
+        assert out.code == "scenario_not_found"
+        assert "ghost" in out.error
 
     def test_happy_path_no_spans(self, tmp_path: Path) -> None:
         """A trivial scenario runs but emits no spans. The runner records the
@@ -238,7 +239,8 @@ class TestEval:
         _write_scenario(scenarios, "a")
         out = asyncio.run(eval(scenario_dir=str(scenarios), scenario_ids=["ghost"]))
         assert isinstance(out, MCPError)
-        assert out.code == "invalid_run_id"
+        assert out.code == "scenario_not_found"
+        assert "ghost" in out.error
 
     def test_no_judge_key(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)

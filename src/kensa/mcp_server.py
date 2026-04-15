@@ -63,6 +63,7 @@ from kensa.paths import (
 
 ErrorCode = Literal[
     "scenarios_missing",
+    "scenario_not_found",
     "run_not_found",
     "no_judge_key",
     "invalid_run_id",
@@ -329,7 +330,7 @@ async def run(
     Writes a RunManifest under ``.kensa/runs/<run_id>.json``. Returns a
     summary plus ``manifest_uri`` for full detail.
     """
-    from kensa.runner import run_scenarios
+    from kensa.runner import ScenarioNotFoundError, run_scenarios
 
     loop = asyncio.get_running_loop()
     on_run, _ = _progress_bridge(ctx, loop)
@@ -348,8 +349,12 @@ async def run(
         return MCPError(
             error=str(e), code="scenarios_missing", hint=f"Create scenarios in: {scenario_dir}/"
         )
-    except ValueError as e:
-        return MCPError(error=str(e), code="invalid_run_id")
+    except ScenarioNotFoundError as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_not_found",
+            hint="Check available IDs via the kensa://scenarios resource.",
+        )
     except Exception as e:
         return MCPError(error=str(e), code="internal")
 
@@ -444,7 +449,7 @@ async def eval(
     working judge. Writes manifest, results, and an HTML report.
     """
     from kensa.judge import get_judge, judge_manifest
-    from kensa.runner import load_scenarios, run_scenarios
+    from kensa.runner import ScenarioNotFoundError, load_scenarios, run_scenarios
 
     try:
         scenarios = load_scenarios(scenario_dir=scenario_dir, scenario_ids=scenario_ids)
@@ -452,8 +457,12 @@ async def eval(
         return MCPError(
             error=str(e), code="scenarios_missing", hint=f"Create scenarios in: {scenario_dir}/"
         )
-    except ValueError as e:
-        return MCPError(error=str(e), code="invalid_run_id")
+    except ScenarioNotFoundError as e:
+        return MCPError(
+            error=str(e),
+            code="scenario_not_found",
+            hint="Check available IDs via the kensa://scenarios resource.",
+        )
 
     needs_judge = any(sc.criteria or sc.judge for sc in scenarios)
     try:

@@ -20,6 +20,20 @@ from kensa.translate import oi_to_kensa
 
 DEFAULT_TIMEOUT = 300
 
+
+class ScenarioNotFoundError(ValueError):
+    """Raised when one or more requested scenario IDs are not present.
+
+    Subclasses :class:`ValueError` so existing callers that catch broad
+    ``ValueError`` continue to work; new callers (the MCP server) catch the
+    specific class so they can map to a distinct error code.
+    """
+
+    def __init__(self, missing: set[str]) -> None:
+        self.missing = missing
+        super().__init__(f"Scenarios not found: {sorted(missing)}")
+
+
 _PROTECTED_ENV_VARS: frozenset[str] = frozenset(
     {
         "KENSA_TRACE_DIR",
@@ -124,8 +138,7 @@ def load_scenarios(
 
     if scenario_ids and len(scenarios) != len(scenario_ids):
         found = {s.id for s in scenarios}
-        missing = set(scenario_ids) - found
-        raise ValueError(f"Scenarios not found: {missing}")
+        raise ScenarioNotFoundError(set(scenario_ids) - found)
 
     return scenarios
 
