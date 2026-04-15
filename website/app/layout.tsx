@@ -18,9 +18,9 @@ const silkscreen = Silkscreen({
 });
 
 const SITE_URL = "https://kensa.sh";
-const SITE_TITLE = "kensa — the open source agent evals harness";
+const SITE_TITLE = "Kensa | Agent evals from zero to trusted";
 const SITE_DESCRIPTION =
-  "Tell your coding agent to evaluate an agent and get a working eval suite in minutes. Deterministic checks, LLM judge, OTel tracing. No platform.";
+  "Your coding agent drafts evals. You approve. Kensa instruments and runs them.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
         url: "/thumbnail.png",
         width: 1920,
         height: 1080,
-        alt: "kensa — the open source agent evals harness",
+        alt: "Kensa | Agent evals from zero to trusted",
       },
     ],
   },
