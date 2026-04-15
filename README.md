@@ -97,12 +97,15 @@ Kensa ships an MCP server that exposes the eval workflow to any MCP-aware
 client — Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop,
 anything that speaks MCP.
 
+One-liner for Claude Code (run from your project root):
+
 ```bash
-uv add "kensa[mcp]"
-kensa-mcp                       # stdio transport (default)
-kensa-mcp --http --port 8765    # streamable HTTP, localhost-only
-kensa mcp                       # alias for kensa-mcp
+claude mcp add kensa -- uvx kensa-mcp
 ```
+
+`uvx` pulls [`kensa-mcp`](https://pypi.org/project/kensa-mcp/) from PyPI into
+an isolated environment on first launch. No pre-install needed. The server
+reads `.kensa/` relative to the cwd it inherits from Claude Code.
 
 **Tools (7):** `init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`.
 
@@ -125,16 +128,46 @@ Errors come back as a typed `MCPError` envelope (`{error, code, hint}`) with
 stable `code` values so clients can branch on failure type.
 
 <details>
-<summary>Example Claude Code config</summary>
+<summary>Manual config (Cursor, Codex, Claude Desktop, etc.)</summary>
 
-Add to `~/.claude.json` (or your project's `.mcp.json`):
+Add to your MCP client config (e.g. `~/.claude.json` or a project-local `.mcp.json`):
 
 ```json
 {
   "mcpServers": {
     "kensa": {
-      "command": "kensa-mcp",
+      "command": "uvx",
+      "args": ["kensa-mcp"],
       "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+Already have kensa installed in the project? Add the extra (`uv add "kensa[mcp]"`)
+and use the built-in `kensa mcp` subcommand instead of the shim:
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/your/project"
+    }
+  }
+}
+```
+
+For local Kensa development from a source checkout:
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uv",
+      "args": ["run", "--extra", "mcp", "kensa", "mcp"],
+      "cwd": "/absolute/path/to/kensa"
     }
   }
 }
