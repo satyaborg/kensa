@@ -1,0 +1,20 @@
+id: ambiguous-request
+name: Ambiguous request — graceful handling
+description: >
+  User sends a vague message. Agent should respond helpfully without
+  crashing, routing randomly, or calling tools prematurely.
+
+input: "I have a question about my flight"
+run_command: [python, run_agent.py]
+
+checks:
+  - type: max_turns
+    params:
+      max: 4
+    description: Should not loop excessively on an ambiguous request.
+
+criteria: |
+  The agent should respond helpfully to the vague request. It may ask a
+  clarifying question, offer to help with specific topics (baggage, seating),
+  or route to the FAQ agent. It should NOT call tools without knowing what
+  the user actually needs. It should NOT produce an error or empty response.

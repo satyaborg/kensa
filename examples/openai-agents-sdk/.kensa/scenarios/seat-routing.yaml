@@ -1,0 +1,30 @@
+id: seat-routing
+name: Seat booking routing — change seat
+description: >
+  User asks to change their seat with all required info.
+  Agent should route to seat booking agent and call update_seat.
+
+input: "I'd like to change my seat to 14A. My confirmation number is ABC123."
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_called
+    params:
+      tools: [update_seat]
+    description: Must call update_seat to process the seat change.
+
+  - type: tools_not_called
+    params:
+      tools: [faq_lookup_tool]
+    description: FAQ tool should not be invoked for a seat change.
+
+  - type: output_contains
+    params:
+      value: "14A"
+      case_sensitive: false
+    description: Confirmation should reference the requested seat.
+
+  - type: max_turns
+    params:
+      max: 5
+    description: With all info provided upfront, should resolve quickly.

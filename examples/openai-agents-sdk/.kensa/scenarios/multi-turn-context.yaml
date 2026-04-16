@@ -1,0 +1,25 @@
+id: multi-turn-context
+name: Multi-turn — seat change across two turns
+description: >
+  User provides seat change info across two turns. Agent must maintain
+  context: first turn routes to seat booking, second turn completes it.
+
+input: '["I need to change my seat. My confirmation is XYZ789.", "14A please"]'
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_called
+    params:
+      tools: [update_seat]
+    description: Must eventually call update_seat with the info from both turns.
+
+  - type: output_contains
+    params:
+      value: "14A"
+      case_sensitive: false
+    description: Final confirmation should reference the requested seat.
+
+  - type: max_turns
+    params:
+      max: 8
+    description: Two turns of conversation, allow room for routing + tool use.

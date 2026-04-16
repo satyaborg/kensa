@@ -1,0 +1,26 @@
+id: wrong-routing-trap
+name: Routing edge case — cost question is FAQ not booking
+description: >
+  User asks about seat change costs. This is a pricing/FAQ question, not a
+  seat booking request. Agent should route to FAQ, not seat booking.
+
+input: "How much does it cost to change my seat?"
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_not_called
+    params:
+      tools: [update_seat]
+    description: >
+      This is a pricing question, not a booking request. update_seat
+      should not be called.
+
+  - type: tools_called
+    params:
+      tools: [faq_lookup_tool]
+    description: Should use the FAQ tool to look up pricing information.
+
+  - type: max_turns
+    params:
+      max: 5
+    description: Routing decision should not cause excessive back-and-forth.

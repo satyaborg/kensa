@@ -1,0 +1,6 @@
+openai-agents-python/
+.kensa/traces/
+.kensa/runs/
+.kensa/results/
+.kensa/reports/
+.env

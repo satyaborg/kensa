@@ -1,0 +1,27 @@
+id: seat-missing-info
+name: Seat booking — missing information
+description: >
+  User asks to change their seat but doesn't provide the seat number or
+  confirmation number. Agent should ask for the missing info, not guess.
+
+input: "Change my seat"
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_not_called
+    params:
+      tools: [update_seat]
+    description: >
+      Should NOT call update_seat without required info.
+      Must ask clarifying questions first.
+
+  - type: max_turns
+    params:
+      max: 4
+    description: Should ask for info promptly, not loop.
+
+criteria: |
+  The agent must ask the user for their confirmation number and/or desired
+  seat number before attempting to change the seat. It should NOT call
+  update_seat with made-up or placeholder values. It should NOT assume
+  any default seat.

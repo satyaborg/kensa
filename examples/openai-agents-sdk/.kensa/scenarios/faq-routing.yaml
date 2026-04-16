@@ -1,0 +1,30 @@
+id: faq-routing
+name: FAQ routing — baggage policy
+description: >
+  User asks a straightforward FAQ question. Agent should route to FAQ agent
+  and call faq_lookup_tool, not hallucinate an answer from training data.
+
+input: "What's the baggage policy?"
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_called
+    params:
+      tools: [faq_lookup_tool]
+    description: Must use the FAQ lookup tool, not answer from memory.
+
+  - type: tools_not_called
+    params:
+      tools: [update_seat]
+    description: Seat booking tool should not be invoked for an FAQ.
+
+  - type: output_contains
+    params:
+      value: "50 pounds"
+      case_sensitive: false
+    description: Response must include the actual baggage weight limit.
+
+  - type: max_turns
+    params:
+      max: 4
+    description: Should not need more than 4 LLM calls for a simple FAQ.

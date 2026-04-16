@@ -1,0 +1,22 @@
+id: faq-no-hallucinate
+name: FAQ — no hallucination on unknown topic
+description: >
+  User asks about a policy not in the FAQ database. The faq_lookup_tool
+  returns "I'm sorry, I don't know the answer." Agent must not fabricate
+  a policy from training data.
+
+input: "What's the policy on emotional support animals?"
+run_command: [python, run_agent.py]
+
+checks:
+  - type: tools_called
+    params:
+      tools: [faq_lookup_tool]
+    description: Must attempt the FAQ lookup before answering.
+
+  - type: max_turns
+    params:
+      max: 5
+    description: Should not loop trying to find an answer that doesn't exist.
+
+judge: no-hallucination
