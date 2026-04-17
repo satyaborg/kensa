@@ -60,17 +60,10 @@ That gives you the basic loop:
 - reports show what failed and why
 - you review changes, approve fixes and iterate
 
-## If instrumentation is missing
+## Instrumentation
 
-Add `instrument()` before importing your LLM SDK:
-
-```python
-from kensa import instrument
-
-instrument()
-```
-
-If you use the bundled skills, your coding agent will usually add this for you.
+Zero code changes. kensa captures LLM calls, tool use, tokens, cost, and latency
+without modifying your agent.
 
 <details>
 <summary>Provider extras</summary>

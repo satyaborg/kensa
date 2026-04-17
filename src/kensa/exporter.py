@@ -85,17 +85,22 @@ def _try_instrumentor(module_path: str, class_name: str) -> str | None:
         return None
 
 
+_instrumented = False
+
+
 def instrument(trace_dir: str | None = None) -> None:
     """One-call instrumentation: set up OTel tracing and instrument detected SDKs.
 
     No-ops gracefully when KENSA_TRACE_DIR is not set, so agents can run
     both inside and outside the eval harness without code changes.
 
-    Usage in an agent's entry point::
-
-        from kensa import instrument
-        instrument()
+    Idempotent: repeated calls within the same process are no-ops. This lets
+    the runner's sitecustomize injection call ``instrument()`` automatically
+    while still supporting agents that keep the explicit call.
     """
+    global _instrumented
+    if _instrumented:
+        return
     resolved = trace_dir or os.environ.get("KENSA_TRACE_DIR")
     if not resolved:
         return
@@ -117,3 +122,5 @@ def instrument(trace_dir: str | None = None) -> None:
             "Install one: uv add kensa[anthropic] (or: pip install kensa[anthropic])",
             stacklevel=2,
         )
+
+    _instrumented = True

@@ -7,6 +7,7 @@ import os
 import subprocess
 import tempfile
 import time
+import warnings
 from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
@@ -154,6 +155,59 @@ def _build_command(command: list[str], input_value: str | dict[str, Any] | None)
     return [*command, input_str]
 
 
+_SITECUSTOMIZE_BODY = """\
+import os as _os
+import sys as _sys
+
+_here = _os.path.dirname(_os.path.abspath(__file__))
+
+from kensa.exporter import instrument
+instrument()
+
+# Strip injected dir so child subprocesses don't re-instrument.
+if _here in _sys.path:
+    _sys.path.remove(_here)
+_pp = _os.environ.get("PYTHONPATH", "")
+_parts = [p for p in _pp.split(_os.pathsep) if p != _here]
+if _parts:
+    _os.environ["PYTHONPATH"] = _os.pathsep.join(_parts)
+elif "PYTHONPATH" in _os.environ:
+    del _os.environ["PYTHONPATH"]
+"""
+
+
+def _write_sitecustomize(tmp_dir: str) -> None:
+    """Write the bootstrap sitecustomize.py into *tmp_dir*."""
+    Path(tmp_dir, "sitecustomize.py").write_text(_SITECUSTOMIZE_BODY)
+
+
+def _build_pythonpath(tmp_dir: str, env: dict[str, str]) -> str:
+    """Build PYTHONPATH that activates sitecustomize.
+
+    Prepends *tmp_dir* (for sitecustomize.py) to the existing PYTHONPATH
+    from *env* (which already includes .env merges and scenario overrides).
+    """
+    parts = [tmp_dir]
+    existing = env.get("PYTHONPATH", "")
+    if existing:
+        parts.append(existing)
+    return os.pathsep.join(parts)
+
+
+def _warn_existing_sitecustomize() -> None:
+    """Warn if the user's environment already has a sitecustomize.py we'll shadow."""
+    import importlib.util
+
+    spec = importlib.util.find_spec("sitecustomize")
+    if spec and spec.origin:
+        warnings.warn(
+            f"kensa: an existing sitecustomize.py was found at {spec.origin} and will be "
+            "shadowed during this eval run. If you need it to run, add its contents to your "
+            "agent code or contact kensa maintainers.",
+            stacklevel=2,
+        )
+
+
 def _read_spans(trace_dir: Path) -> list[Span]:
     """Read OI spans from a trace directory and translate to kensa format."""
     spans: list[Span] = []
@@ -209,6 +263,9 @@ def run_scenario(
         env.update(safe_overrides)
         env["KENSA_TRACE_DIR"] = tmp_dir
 
+        _write_sitecustomize(tmp_dir)
+        env["PYTHONPATH"] = _build_pythonpath(tmp_dir, env)
+
         effective_input = input_override if input_override is not None else scenario.input
         argv = _build_command(scenario.run_command, effective_input)
 
@@ -248,8 +305,7 @@ def run_scenario(
         else:
             msg = (
                 f"Scenario {scenario.id!r} ran successfully but produced no traces.\n"
-                "Ensure the agent calls: from kensa import instrument; instrument()\n"
-                "and that the matching SDK instrumentor is installed "
+                "Ensure the matching SDK instrumentor is installed "
                 "(e.g. uv add kensa[openai] or: pip install kensa[openai])."
             )
             if stderr_output.strip():
@@ -301,6 +357,7 @@ def run_scenarios(
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> RunManifest:
     """Run all scenarios (or filtered subset) and return a manifest."""
+    _warn_existing_sitecustomize()
     if scenarios is None:
         scenarios = load_scenarios(scenario_dir, scenario_ids)
     timestamp = datetime.now(tz=timezone.utc)

@@ -11,8 +11,10 @@ import yaml
 from kensa.models import Scenario, Span, SpanKind
 from kensa.runner import (
     _build_command,
+    _build_pythonpath,
     _read_spans,
     _trace_filename,
+    _write_sitecustomize,
     _write_trace,
     load_dataset,
     load_dotenv,
@@ -434,3 +436,242 @@ class TestRunScenarios:
         manifest = run_scenarios(scenario_dir=str(scenario_dir))
         assert len(manifest.scenarios) == 0
         assert manifest.run_id is not None
+
+
+class TestSitecustomizeInjection:
+    def test_write_sitecustomize(self, tmp_path: Path) -> None:
+        _write_sitecustomize(str(tmp_path))
+        sc = tmp_path / "sitecustomize.py"
+        assert sc.exists()
+        content = sc.read_text()
+        assert "from kensa.exporter import instrument" in content
+        assert "instrument()" in content
+
+    def test_build_pythonpath_prepends_tmp_dir(self, tmp_path: Path) -> None:
+        import os
+
+        pp = _build_pythonpath(str(tmp_path), {})
+        assert pp.split(os.pathsep)[0] == str(tmp_path)
+
+    def test_build_pythonpath_preserves_existing(self, tmp_path: Path) -> None:
+        import os
+
+        pp = _build_pythonpath(str(tmp_path), {"PYTHONPATH": "/existing/path"})
+        parts = pp.split(os.pathsep)
+        assert parts[0] == str(tmp_path)
+        assert "/existing/path" in parts
+
+    def test_build_pythonpath_reads_env_not_os_environ(self, tmp_path: Path) -> None:
+        """Ensures .env-merged PYTHONPATH is preserved, not os.environ."""
+        import os
+
+        env = {"PYTHONPATH": "/from/dotenv"}
+        pp = _build_pythonpath(str(tmp_path), env)
+        assert "/from/dotenv" in pp.split(os.pathsep)
+
+
+class TestRunScenarioZeroCodeChange:
+    """Agents without manual instrument() produce spans via sitecustomize."""
+
+    def test_unmodified_agent_produces_spans(self, tmp_path: Path) -> None:
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('zero-change-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', sys.argv[1])",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="zero_code",
+            name="Zero code change",
+            run_command=["python3", str(agent)],
+            input="hi",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        spans = read_trace(run.trace_path)
+        assert len(spans) == 1
+        assert spans[0].output == {"value": "hi"}
+
+    def test_agent_with_manual_instrument_not_duplicated(self, tmp_path: Path) -> None:
+        """Backward compat: manual instrument() call plus sitecustomize produces no dup spans."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "from kensa import instrument",
+                    "instrument()",
+                    "import sys",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('compat-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', sys.argv[1])",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="compat",
+            name="Backward compat",
+            run_command=["python3", str(agent)],
+            input="hello",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        spans = read_trace(run.trace_path)
+        assert len(spans) == 1
+        assert spans[0].output == {"value": "hello"}
+
+    def test_non_python_command_no_injection(self, tmp_path: Path) -> None:
+        """Non-Python commands work. Sitecustomize only activates for Python processes."""
+        from kensa.runner import run_scenario
+
+        scenario = Scenario(
+            id="non_python",
+            name="Non-Python command",
+            run_command=["echo", "hello"],
+            input="test",
+        )
+        with pytest.raises(RuntimeError, match="produced no traces"):
+            run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+
+    def test_dash_m_module_produces_spans(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """python -m invocation works via sitecustomize (no code changes)."""
+        from kensa.runner import run_scenario
+
+        pkg = tmp_path / "myagent"
+        pkg.mkdir()
+        (pkg / "__init__.py").write_text("")
+        (pkg / "__main__.py").write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('module-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', sys.argv[1])",
+                ]
+            )
+        )
+        # PYTHONPATH is protected from env_overrides, so set it in os.environ
+        # (runner does os.environ.copy() first, then merges overrides).
+        monkeypatch.setenv("PYTHONPATH", str(tmp_path))
+        scenario = Scenario(
+            id="dash_m",
+            name="Module invocation",
+            run_command=["python3", "-m", "myagent"],
+            input="from_module",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        spans = read_trace(run.trace_path)
+        assert len(spans) == 1
+        assert spans[0].output == {"value": "from_module"}
+
+    def test_python_flags_preserved(self, tmp_path: Path) -> None:
+        """Python flags like -u don't break sitecustomize injection."""
+        from kensa.runner import run_scenario
+
+        agent = tmp_path / "agent.py"
+        agent.write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('flag-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', sys.argv[1])",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="flags",
+            name="Python flags",
+            run_command=["python3", "-u", str(agent)],
+            input="unbuffered",
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        spans = read_trace(run.trace_path)
+        assert len(spans) == 1
+        assert spans[0].output == {"value": "unbuffered"}
+
+    def test_sibling_imports_outside_cwd(self, tmp_path: Path) -> None:
+        """Agent with sibling imports works when agent lives outside cwd."""
+        from kensa.runner import run_scenario
+
+        agent_dir = tmp_path / "agents"
+        agent_dir.mkdir()
+        (agent_dir / "helper.py").write_text("GREETING = 'hello from helper'")
+        (agent_dir / "agent.py").write_text(
+            "\n".join(
+                [
+                    "import sys",
+                    "from helper import GREETING",
+                    "from opentelemetry import trace",
+                    "tracer = trace.get_tracer('sibling-agent')",
+                    "with tracer.start_as_current_span('ChatCompletion') as span:",
+                    "    span.set_attribute('openinference.span.kind', 'LLM')",
+                    "    span.set_attribute('llm.model_name', 'test-model')",
+                    "    span.set_attribute('output.value', GREETING)",
+                ]
+            )
+        )
+        scenario = Scenario(
+            id="sibling",
+            name="Sibling imports",
+            run_command=["python3", str(agent_dir / "agent.py")],
+        )
+        _, run = run_scenario(scenario, trace_dir=str(tmp_path / "traces"), timeout=5)
+        spans = read_trace(run.trace_path)
+        assert len(spans) == 1
+        assert spans[0].output == {"value": "hello from helper"}
+
+
+class TestWarnExistingSitecustomize:
+    def test_warns_when_sitecustomize_exists(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Warning fires when an existing sitecustomize.py is on the path."""
+        import warnings
+
+        from kensa.runner import _warn_existing_sitecustomize
+
+        sc_dir = tmp_path / "fake_site"
+        sc_dir.mkdir()
+        (sc_dir / "sitecustomize.py").write_text("# existing")
+        monkeypatch.syspath_prepend(str(sc_dir))
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_existing_sitecustomize()
+
+        warning_messages = [str(x.message) for x in w]
+        assert any("sitecustomize.py was found" in m for m in warning_messages)
+
+    def test_no_warning_without_sitecustomize(self) -> None:
+        """No warning when no sitecustomize.py exists (normal case)."""
+        import warnings
+
+        from kensa.runner import _warn_existing_sitecustomize
+
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            _warn_existing_sitecustomize()
+
+        sitecustomize_warnings = [x for x in w if "sitecustomize" in str(x.message)]
+        assert len(sitecustomize_warnings) == 0

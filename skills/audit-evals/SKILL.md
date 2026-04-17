@@ -99,22 +99,9 @@ Tell the user what you found honestly:
 
 ## Verify instrumentation
 
-If the user ran `kensa init`, the generated example agent in `.kensa/agents/` already includes `instrument()`. Skip to `kensa doctor` to verify.
+Instrumentation is automatic. The runner injects `sitecustomize.py` via `PYTHONPATH` before the agent runs. No code changes needed in the agent.
 
-For the user's real agent, run the instrumentation check:
-
-```bash
-uv run python ${CLAUDE_SKILL_DIR}/scripts/check_instrumentation.py <agent_entry_point>
-```
-
-If missing, add instrumentation **before any LLM SDK imports** in the entry point:
-
-```python
-from kensa import instrument
-instrument()
-```
-
-Install the matching extras:
+Ensure the matching SDK extra is installed:
 
 | SDK | Install |
 |-----|---------|
@@ -122,7 +109,7 @@ Install the matching extras:
 | `openai` | `uv add kensa[openai]` |
 | `langchain` | `uv add kensa[langchain]` |
 
-After adding instrumentation, verify it works:
+Verify with:
 
 ```bash
 kensa doctor
@@ -136,8 +123,8 @@ Hand off to `generate-scenarios` with the codebase scan context (entry point, to
 
 ## Gotchas
 
-- `instrument()` no-ops when `KENSA_TRACE_DIR` is unset. Safe to leave in production code.
+- `instrument()` is idempotent. Agents that still have `from kensa import instrument; instrument()` work fine (no duplicate spans).
 - `instrument()` warns when no SDK instrumentors are installed. Install the matching extra.
-- `instrument()` must be called before SDK imports. Order matters.
 - `.env` is auto-loaded by the runner (walks up from cwd). Never read or print `.env` yourself: it holds secrets. Use `kensa doctor` to verify which env vars are set.
 - Judge model resolution: `KENSA_JUDGE_MODEL` env var > `ANTHROPIC_API_KEY` (claude-sonnet-4-6) > `OPENAI_API_KEY` (gpt-5.4-mini) > error.
+- For non-Python commands or `python -S`/`-I`, the escape hatch is `from kensa import instrument; instrument()` in the agent code.
