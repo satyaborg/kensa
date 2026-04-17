@@ -58,20 +58,8 @@ That gives you the basic loop:
 
 ## Instrumentation
 
-Zero code changes. The runner injects a `sitecustomize.py` via `PYTHONPATH` that
-activates OTel auto-instrumentation before your first import. Works for any
-Python invocation form.
-
-For non-Python commands, add the escape hatch before importing your LLM SDK:
-
-```python
-from kensa import instrument
-
-instrument()
-```
-
-`instrument()` is idempotent, so keeping it around for agents that also run outside
-the harness is safe.
+Zero code changes. kensa captures LLM calls, tool use, tokens, cost, and latency
+without modifying your agent.
 
 <details>
 <summary>Provider extras</summary>
