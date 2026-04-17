@@ -137,3 +137,4 @@ Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's
 - Let exceptions propagate. Catch only when you can meaningfully handle or enrich.
 - TOCTOU: use `try/except FileNotFoundError` instead of `if path.exists()` then read.
 - Conventional commits with three prefixes only: `feat:`, `fix:`, `chore:`. Append `!` for breaking changes (e.g. `feat!:`). No scopes. Message after prefix is imperative, lowercase, <72 chars.
+- Branch names: `type/short-description` (e.g. `feat/auth-flow`, `fix/null-check`, `chore/readme-badges`). When working in a git worktree, the auto-generated `worktree-*` branch must be renamed to follow this convention before the first commit: `git branch -m worktree-<slug> type/short-description`.
