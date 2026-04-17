@@ -7,10 +7,12 @@
 <p>Tell your coding agent to evaluate an agent. Get a working eval suite in minutes.</p>
 
 <p>
-<a href="https://github.com/satyaborg/kensa/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/satyaborg/kensa/ci.yml?label=CI" alt="CI"></a>
-<a href="https://pypi.org/project/kensa/"><img src="https://img.shields.io/pypi/v/kensa" alt="PyPI"></a>
-<a href="https://www.python.org/downloads/"><img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fsatyaborg%2Fkensa%2Fmain%2Fpyproject.toml" alt="Python"></a>
-<a href="LICENSE"><img src="https://img.shields.io/github/license/satyaborg/kensa" alt="License"></a>
+<a href="https://github.com/satyaborg/kensa/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/satyaborg/kensa/ci.yml?label=CI&style=flat-square" alt="CI"></a>
+<a href="https://pypi.org/project/kensa/"><img src="https://img.shields.io/pypi/v/kensa?style=flat-square" alt="PyPI"></a>
+<a href="https://www.python.org/downloads/"><img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fsatyaborg%2Fkensa%2Fmain%2Fpyproject.toml&style=flat-square" alt="Python"></a>
+<a href="LICENSE"><img src="https://img.shields.io/github/license/satyaborg/kensa?style=flat-square" alt="License"></a>
+<a href="https://pepy.tech/projects/kensa"><img src="https://img.shields.io/pepy/dt/kensa?style=flat-square" alt="Downloads"></a>
+<a href="https://github.com/satyaborg/kensa/stargazers"><img src="https://img.shields.io/github/stars/satyaborg/kensa?style=flat-square" alt="Stars"></a>
 </p>
 
 </div>
@@ -18,6 +20,8 @@
 ---
 
 `kensa` is an open source eval harness for agent codebases. It gives coding agents an opinionated CLI and bundled skills to generate scenarios, run them in subprocesses, judge results, and report failures.
+
+> **Note:** kensa is under active development. Things may shift between minor versions as the harness stabilizes. Pin your version if you need predictability. If something breaks, [open an issue](https://github.com/satyaborg/kensa/issues). Your feedback shapes evals.
 
 ## Installation
 
@@ -94,7 +98,7 @@ uv add "kensa[all]"
 ## MCP server
 
 Kensa ships an MCP server that exposes the eval workflow to any MCP-aware
-client — Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop,
+client: Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop,
 anything that speaks MCP.
 
 One-liner for Claude Code (run from your project root):
@@ -123,7 +127,7 @@ kensa://judges/{name}                 # judge prompt spec
 ```
 
 Long-running tools (`run`, `judge`, `eval`) return a compact summary plus
-a `results_uri` — fetch detail via the resource only when you need it.
+a `results_uri`. Fetch detail via the resource only when you need it.
 Errors come back as a typed `MCPError` envelope (`{error, code, hint}`) with
 stable `code` values so clients can branch on failure type.
 

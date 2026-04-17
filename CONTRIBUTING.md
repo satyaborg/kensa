@@ -28,7 +28,7 @@ ruff format src/ tests/                     # format
 uv run ty check                                     # type check
 ```
 
-4. Commit with a clear, imperative message under 72 chars
+4. Commit with a clear, imperative message under 72 chars. Sign off with `git commit -s` ([DCO](https://developercertificate.org/))
 5. Open a PR against `main`
 
 ## Code conventions
