@@ -102,11 +102,11 @@ Read `skills/evals-directive.md` before creating or modifying any skill.
 
 - **Registry pattern**: `CHECK_REGISTRY` in `checks.py` and `FORMATTERS` in `report.py`. Add a new check or format by registering a function; no call-site changes needed.
 - **Protocol-based judges**: `JudgeProvider` protocol in `judge.py`. AnthropicJudge and OpenAIJudge are implementations. Check-fail short-circuits the LLM call to save cost.
-- **`exporter.py`**: OTel JSONL span exporter. Agents call `instrument()` to enable capture. No-ops when `KENSA_TRACE_DIR` is unset.
+- **`exporter.py`**: OTel JSONL span exporter. `instrument()` is idempotent and no-ops when `KENSA_TRACE_DIR` is unset.
 
 ### Subprocess isolation model
 
-Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's entry point calls `from kensa import instrument; instrument()` which configures OTel, writes spans as JSONL, and auto-instruments any detected SDK (Anthropic, OpenAI, LangChain). Runner reads spans post-execution and translates to kensa format.
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The runner injects a `sitecustomize.py` via `PYTHONPATH` that calls `instrument()` before the agent's code runs. This configures OTel, writes spans as JSONL, and auto-instruments any detected SDK (Anthropic, OpenAI, LangChain). No code changes needed in the agent. Runner reads spans post-execution and translates to kensa format. The injected directory is stripped from `PYTHONPATH` after instrumentation to prevent child subprocess re-instrumentation.
 
 ### Judge model resolution
 
@@ -117,7 +117,7 @@ Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's
 
 ### Public API
 
-`instrument()` is the only public export (`__init__.py`). Everything else is internal.
+`instrument()` is the only public export (`__init__.py`). It remains available as an opt-in escape hatch for non-Python commands or environments where sitecustomize cannot run (e.g. `python -S`). Everything else is internal.
 
 ## CI
 

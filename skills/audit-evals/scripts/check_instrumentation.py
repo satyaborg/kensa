@@ -1,17 +1,21 @@
 #!/usr/bin/env python3
-"""Check whether an agent entry point has kensa tracing instrumentation.
+"""Check whether an agent entry point is ready for kensa tracing.
 
 Usage:
     python scripts/check_instrumentation.py <agent_file>
 
 Checks for:
-    1. `from kensa import instrument; instrument()`
-    2. An LLM SDK import (anthropic, openai, langchain)
-    3. Correct ordering: instrumentation before SDK usage
+    1. An LLM SDK import (anthropic, openai, langchain)
+    2. If manual `instrument()` is present, correct ordering before SDK imports
+
+Note: manual `instrument()` is no longer required. The runner injects
+sitecustomize.py via PYTHONPATH to auto-instrument. This script only
+verifies that the SDK extras are importable and any existing manual
+instrumentation is correctly ordered.
 
 Exit codes:
-    0 — instrumentation looks correct
-    1 — missing or misconfigured instrumentation (details printed)
+    0 — agent is ready for tracing
+    1 — issues found (details printed)
 """
 
 from __future__ import annotations
@@ -99,14 +103,12 @@ def check_file(path: Path) -> list[str]:
         extras_str = ", ".join(f'"kensa[{e}]"' for e in extras)
         install = _install_cmd(extras_str)
         issues.append(
-            f"Missing instrumentation. Detected SDK(s): {sdks_str}\n"
-            f"  Add BEFORE any SDK imports:\n"
-            f"    from kensa import instrument\n"
-            f"    instrument()\n"
-            f"  Install extras: {install}"
+            f"Detected SDK(s): {sdks_str}\n"
+            f"  Ensure extras are installed: {install}\n"
+            f"  (Manual instrument() is not required. The runner handles it automatically.)"
         )
 
-    # Check ordering: instrumentation should come before SDK imports
+    # Check ordering: if manual instrumentation is present, it should come before SDK imports
     if has_instrument:
         for sdk, line in sdk_first_line.items():
             if line < instrument_line:
@@ -132,7 +134,7 @@ def main() -> None:
     issues = check_file(path)
 
     if not issues:
-        print(f"OK: {path} has correct instrumentation setup.")
+        print(f"OK: {path} is ready for kensa tracing.")
         sys.exit(0)
 
     print(f"ISSUES in {path}:\n")

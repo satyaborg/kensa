@@ -56,9 +56,13 @@ That gives you the basic loop:
 - reports show what failed and why
 - you review changes, approve fixes and iterate
 
-## If instrumentation is missing
+## Instrumentation
 
-Add `instrument()` before importing your LLM SDK:
+Zero code changes. The runner injects a `sitecustomize.py` via `PYTHONPATH` that
+activates OTel auto-instrumentation before your first import. Works for any
+Python invocation form.
+
+For non-Python commands, add the escape hatch before importing your LLM SDK:
 
 ```python
 from kensa import instrument
@@ -66,7 +70,8 @@ from kensa import instrument
 instrument()
 ```
 
-If you use the bundled skills, your coding agent will usually add this for you.
+`instrument()` is idempotent, so keeping it around for agents that also run outside
+the harness is safe.
 
 <details>
 <summary>Provider extras</summary>
