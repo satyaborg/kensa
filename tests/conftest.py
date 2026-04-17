@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
+import kensa.exporter as _kensa_exporter
 from kensa.models import (
     Check,
     CheckType,
@@ -17,6 +19,15 @@ from kensa.models import (
     TokenCounts,
     ToolInfo,
 )
+
+
+@pytest.fixture(autouse=True)
+def _reset_kensa_instrumented_flag() -> Iterator[None]:
+    """Reset the instrument() idempotency flag so tests see a clean state."""
+    _kensa_exporter._instrumented = False
+    yield
+    _kensa_exporter._instrumented = False
+
 
 BASE_TIME = datetime(2026, 3, 17, 14, 30, 0, tzinfo=timezone.utc)
 

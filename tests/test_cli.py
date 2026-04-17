@@ -1089,14 +1089,15 @@ class TestCliInit:
             content = yaml.safe_load(example.read_text())
             assert content["id"] == "example"
 
-    def test_init_scaffolds_agent_with_instrument(self, tmp_path: Path) -> None:
+    def test_init_scaffolds_agent_without_instrument_boilerplate(self, tmp_path: Path) -> None:
+        """Scaffolded agent has no `instrument()` boilerplate — the wrapper handles it."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["init"])
             assert result.exit_code == 0
             agent = Path(".kensa/agents/example.py").read_text()
-            assert "from kensa import instrument" in agent
-            assert "instrument()" in agent
+            assert "from kensa import instrument" not in agent
+            assert "instrument()" not in agent
 
     def test_init_scaffolds_stub_without_api_keys(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
@@ -1108,7 +1109,7 @@ class TestCliInit:
             result = runner.invoke(cli, ["init"])
             assert result.exit_code == 0
             agent = Path(".kensa/agents/example.py").read_text()
-            assert "# from kensa import instrument" in agent
+            assert "from kensa import instrument" not in agent
             scenario = yaml.safe_load(Path(".kensa/scenarios/example.yaml").read_text())
             assert "export" in scenario["input"].lower()
 
