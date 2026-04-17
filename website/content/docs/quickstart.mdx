@@ -54,18 +54,14 @@ Then, inside any coding agent (Claude Code, Codex, Cursor, OpenCode, Gemini CLI,
 
 No pre-written scenarios or setup needed. Kensa generates them from your code.
 
-## Add instrumentation if needed
+## Instrumentation
 
-The coding-agent workflow runs `kensa doctor` and helps add missing instrumentation. Manual setup mainly applies if you use `kensa` without the skills flow:
+kensa auto-instruments your agent at startup.
 
-```python
-from kensa import instrument
+Install the extra matching your LLM provider:
 
-instrument()
-
-# Your existing imports below
-from anthropic import Anthropic
-# ...
+```bash
+uv add "kensa[anthropic]"    # or: kensa[openai], kensa[langchain], kensa[all]
 ```
 
-`instrument()` must be called **before** your SDK imports. It configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK. No-ops when `KENSA_TRACE_DIR` is unset, so it's safe to leave in production code.
+Run `kensa doctor` to verify everything is wired up.

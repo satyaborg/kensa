@@ -18,7 +18,7 @@ Provider extras: `uv add "kensa[anthropic]"`, `uv add "kensa[openai]"`, `uv add 
 
 Your coding agent reasons: it reads your codebase, identifies failure modes from past traces, and writes scenarios. The CLI computes: it instruments, executes, judges, and reports. Skills orchestrate the workflow between them.
 
-Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's entry point calls `from kensa import instrument; instrument()` which configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK (Anthropic, OpenAI, LangChain). Deterministic checks run first; if any check fails, the LLM judge is skipped (fail-fast). A scenario passes only when all checks pass AND the judge passes.
+Each scenario runs in its own subprocess. kensa auto-instruments the agent's LLM SDK and captures traces. Deterministic checks run first; if any check fails, the LLM judge is skipped (fail-fast). A scenario passes only when all checks pass AND the judge passes.
 
 It gets smarter each run — feed traces from previous runs back in, and kensa generates scenarios targeting real failure modes instead of educated guesses.
 
@@ -125,7 +125,7 @@ Deterministic checks need no API keys. Add judge keys as secrets for LLM-judged 
 
 ## OTel compatibility
 
-Spans are standard OpenTelemetry emitted via OpenInference instrumentors. kensa's built-in exporter writes them as JSONL to `KENSA_TRACE_DIR`. To ship spans to a remote OTel backend, wire up your own TracerProvider with an OTLP exporter before importing kensa, or skip `instrument()` and feed JSONL spans in via `KENSA_TRACE_DIR`. A built-in OTLP passthrough is on the roadmap.
+Spans are standard OpenTelemetry. kensa writes them as JSONL locally, which is what `kensa run` and `kensa analyze` consume.
 
 ## Architecture
 

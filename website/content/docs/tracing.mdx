@@ -5,7 +5,7 @@ description: OpenTelemetry-based tracing with auto-instrumentation for major LLM
 
 ## Auto-instrumentation
 
-kensa auto-instruments LLM SDKs via [OpenInference](https://github.com/Arize-ai/openinference). Install the extra for your provider:
+Zero code changes. kensa auto-instruments your agent at startup. Install the extra for your provider:
 
 ```bash
 uv add "kensa[anthropic]"    # Anthropic
@@ -14,22 +14,11 @@ uv add "kensa[langchain]"    # LangChain
 uv add "kensa[all]"          # Everything
 ```
 
-Add two lines to your agent's entry point:
+## What gets captured
 
-```python
-from kensa import instrument
-instrument()
+Each scenario runs in its own subprocess. kensa captures traces as JSONL and translates them to its internal format.
 
-# Your SDK imports below
-```
-
-`instrument()` must be called **before** SDK imports. It no-ops when `KENSA_TRACE_DIR` is unset.
-
-## How traces work
-
-Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set to a unique directory. The exporter writes spans as JSONL files. After execution, the runner reads spans and translates them to kensa's internal format.
-
-Traces capture:
+Traces include:
 - LLM calls (model, tokens, cost, latency)
 - Tool invocations (name, arguments, results)
 - Span hierarchy (parent/child relationships)
@@ -46,9 +35,7 @@ Feed them back later for trace-informed scenario generation.
 
 ## OTel compatibility
 
-Spans are standard [OpenTelemetry](https://opentelemetry.io/) emitted via [OpenInference](https://github.com/Arize-ai/openinference) instrumentors — anything that reads OTel spans can read them. kensa's built-in exporter writes them as JSONL to `KENSA_TRACE_DIR`, which is what `kensa run` and `kensa analyze` consume.
-
-To ship spans to a remote OTel backend, wire up your own `TracerProvider` with an OTLP exporter **before** importing kensa, or skip `instrument()` entirely and feed JSONL spans into kensa via `KENSA_TRACE_DIR`. A built-in OTLP passthrough is on the roadmap.
+Spans are standard [OpenTelemetry](https://opentelemetry.io/), so anything that reads OTel spans can read them. kensa writes them as JSONL locally, which is what `kensa run` and `kensa analyze` consume.
 
 ## Cache-aware cost tracking
 

@@ -52,7 +52,7 @@ Run 3:                 code + traces (1,2) → even better scenarios
   → Result objects → terminal / markdown / JSON / HTML report
 ```
 
-Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. The agent's entry point calls `instrument()` which configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK. The runner reads spans post-execution and translates them to kensa's internal format.
+Each scenario runs in its own subprocess. kensa auto-instruments the agent's LLM SDK, captures spans as JSONL, and translates them to its internal format.
 
 Checks are deterministic, cheap, and fast. They gate the expensive LLM judge call. If a check fails, the scenario fails immediately without spending tokens. A scenario passes only when **all checks pass AND the judge passes**.
 
