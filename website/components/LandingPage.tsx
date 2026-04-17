@@ -56,7 +56,7 @@ const faqs = [
   },
   {
     q: "Do I need to modify my agent code?",
-    a: "Two lines: `from kensa import instrument; instrument()`. Add before your SDK imports. kensa runs your agent in a subprocess and captures traces automatically. Auto instrumented by coding agents.",
+    a: "No. kensa auto-instruments your agent at startup. Zero code changes needed.",
   },
   {
     q: "Can I run kensa in CI?",
