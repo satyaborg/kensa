@@ -68,10 +68,6 @@ def init_kensa(blank: bool = False, force: bool = False) -> InitResult:
 
 
 _ANTHROPIC_AGENT = """\
-from kensa import instrument
-
-instrument()
-
 import sys
 
 import anthropic
@@ -97,10 +93,6 @@ print(response.content[0].text)
 """
 
 _OPENAI_AGENT = """\
-from kensa import instrument
-
-instrument()
-
 import sys
 
 import openai
@@ -128,10 +120,6 @@ print(response.choices[0].message.content)
 """
 
 _STUB_AGENT = """\
-# Add these two lines to your real agent (before SDK imports):
-# from kensa import instrument
-# instrument()
-
 import sys
 
 message = sys.argv[1] if len(sys.argv) > 1 else ""
