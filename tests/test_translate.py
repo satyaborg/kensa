@@ -8,6 +8,7 @@ from urllib.error import URLError
 import pytest
 
 from kensa.models import Span, SpanKind, TokenCounts, ToolInfo
+from kensa.pricing import candidate_slugs
 from kensa.translate import (
     _compute_cost,
     _fetch_openrouter_prices,
@@ -555,7 +556,7 @@ class TestOiToKensaEdgeCases:
         assert "llm.token_count.cache_read" not in oi["attributes"]
 
 
-JUDGE_MODELS = ["claude-sonnet-4-6", "gpt-5.4-mini"]
+JUDGE_MODELS = ["claude-sonnet-4.6", "gpt-5.4-mini"]
 
 
 @pytest.mark.integration
@@ -581,12 +582,25 @@ class TestOpenRouterPricing:
                 f"{model} missing cache_read_input_token_cost"
             )
 
+    def test_or_prices_keyed_by_dotted_slug(self) -> None:
+        try:
+            prices = _fetch_openrouter_prices()
+        except URLError:
+            pytest.skip("OpenRouter unavailable in current environment")
+        assert "claude-sonnet-4.6" in prices
+        assert "claude-sonnet-4-6" not in prices
+
 
 MOCK_PRICES = {
-    "claude-sonnet-4-6": {
+    "claude-sonnet-4.6": {
         "input_cost_per_token": 3e-06,
         "output_cost_per_token": 1.5e-05,
         "cache_read_input_token_cost": 3e-07,
+    },
+    "claude-haiku-4.5": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 5e-06,
+        "cache_read_input_token_cost": 1e-07,
     },
     "gpt-5.4-mini": {
         "input_cost_per_token": 7.5e-07,
@@ -596,12 +610,87 @@ MOCK_PRICES = {
 }
 
 
+@pytest.fixture(scope="module")
+def live_or_prices() -> dict[str, dict[str, float]]:
+    try:
+        return _fetch_openrouter_prices()
+    except URLError:
+        pytest.skip("OpenRouter unavailable in current environment")
+
+
+class TestCandidateSlugs:
+    def test_version_dashes_do_not_mangle_size_segments(self) -> None:
+        assert "llama-3.3.70b-instruct" not in candidate_slugs("llama-3-3-70b-instruct")
+        assert "qwen-2.5.72b-instruct" not in candidate_slugs("qwen-2-5-72b-instruct")
+
+    def test_dashed_date_not_converted(self) -> None:
+        assert "gpt-4o-2024.08-06" not in candidate_slugs("gpt-4o-2024-08-06")
+        assert "gpt-4o-2024-08.06" not in candidate_slugs("gpt-4o-2024-08-06")
+
+    def test_dotted_dated_also_generates_dashed_dated(self) -> None:
+        candidates = candidate_slugs("gpt-5.4-mini-2026-03-17")
+        assert "gpt-5-4-mini-2026-03-17" in candidates
+        assert "gpt-5.4-mini" in candidates
+
+
+@pytest.mark.integration
+class TestLiveOpenRouterLookup:
+    def test_every_or_slug_prices_itself(self, live_or_prices: dict[str, dict[str, float]]) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        with patch("kensa.pricing._MODEL_PRICES", live_or_prices):
+            misses = [slug for slug in live_or_prices if _compute_cost(slug, tokens) is None]
+        assert not misses, f"OR slugs that failed direct lookup: {misses[:5]}"
+
+    def test_provider_prefixed_form_prices_same_as_short(
+        self, live_or_prices: dict[str, dict[str, float]]
+    ) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        with patch("kensa.pricing._MODEL_PRICES", live_or_prices):
+            misses = [
+                slug for slug in live_or_prices if _compute_cost(f"vendor/{slug}", tokens) is None
+            ]
+        assert not misses, f"Provider-prefixed forms failed to price: {misses[:5]}"
+
+    def test_sdk_dashed_form_resolves_for_dotted_slugs(
+        self, live_or_prices: dict[str, dict[str, float]]
+    ) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        with patch("kensa.pricing._MODEL_PRICES", live_or_prices):
+            misses: list[tuple[str, str]] = []
+            for slug in live_or_prices:
+                if "." not in slug:
+                    continue
+                dashed = slug.replace(".", "-")
+                if dashed == slug or dashed in live_or_prices:
+                    continue
+                if _compute_cost(dashed, tokens) is None:
+                    misses.append((slug, dashed))
+        assert not misses, f"Dashed SDK forms failed to price: {misses[:5]}"
+
+    @pytest.mark.parametrize("date_suffix", ["-20260101", "-2026-01-01"])
+    def test_dashed_dated_snapshot_resolves_to_undated_alias(
+        self,
+        live_or_prices: dict[str, dict[str, float]],
+        date_suffix: str,
+    ) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        with patch("kensa.pricing._MODEL_PRICES", live_or_prices):
+            misses: list[tuple[str, str]] = []
+            for slug in live_or_prices:
+                if "." not in slug:
+                    continue
+                dashed_dated = slug.replace(".", "-") + date_suffix
+                if _compute_cost(dashed_dated, tokens) is None:
+                    misses.append((slug, dashed_dated))
+        assert not misses, f"Dashed-dated SDK forms failed to price: {misses[:5]}"
+
+
 class TestComputeCost:
     def test_none_model(self) -> None:
         assert _compute_cost(None, TokenCounts(prompt=100, completion=50, total=150)) is None
 
     def test_none_tokens(self) -> None:
-        assert _compute_cost("claude-sonnet-4-6", None) is None
+        assert _compute_cost("claude-sonnet-4.6", None) is None
 
     @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
     def test_unknown_model(self) -> None:
@@ -609,9 +698,30 @@ class TestComputeCost:
         assert _compute_cost("unknown-model", tokens) is None
 
     @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
-    def test_basic_no_cache(self) -> None:
+    def test_sdk_dashed_form_resolves(self) -> None:
         tokens = TokenCounts(prompt=1000, completion=500, total=1500)
         cost = _compute_cost("claude-sonnet-4-6", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 3e-06)
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_sdk_dated_snapshot_resolves(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("claude-haiku-4-5-20251001", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 1e-06)
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_sdk_iso_dated_snapshot_resolves(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("gpt-5.4-mini-2026-03-17", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 7.5e-07)
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_basic_no_cache(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("claude-sonnet-4.6", tokens)
         assert cost is not None
         assert cost.prompt == pytest.approx(1000 * 3e-06)
         assert cost.completion == pytest.approx(500 * 1.5e-05)
@@ -620,7 +730,7 @@ class TestComputeCost:
     @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
     def test_with_cache_read(self) -> None:
         tokens = TokenCounts(prompt=1000, completion=500, total=1500, cache_read=800)
-        cost = _compute_cost("claude-sonnet-4-6", tokens)
+        cost = _compute_cost("claude-sonnet-4.6", tokens)
         assert cost is not None
         expected_prompt = 200 * 3e-06 + 800 * 3e-07
         assert cost.prompt == pytest.approx(expected_prompt)
@@ -630,11 +740,18 @@ class TestComputeCost:
     def test_cache_read_cheaper_than_full(self) -> None:
         tokens_no_cache = TokenCounts(prompt=1000, completion=500, total=1500)
         tokens_cached = TokenCounts(prompt=1000, completion=500, total=1500, cache_read=800)
-        cost_full = _compute_cost("claude-sonnet-4-6", tokens_no_cache)
-        cost_cached = _compute_cost("claude-sonnet-4-6", tokens_cached)
+        cost_full = _compute_cost("claude-sonnet-4.6", tokens_no_cache)
+        cost_cached = _compute_cost("claude-sonnet-4.6", tokens_cached)
         assert cost_full is not None
         assert cost_cached is not None
         assert cost_cached.total < cost_full.total
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_provider_prefix_stripped(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("anthropic/claude-sonnet-4.6", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 3e-06)
 
     def test_openrouter_failure_returns_none(self) -> None:
         tokens = TokenCounts(prompt=1000, completion=500, total=1500)
@@ -645,7 +762,7 @@ class TestComputeCost:
                 side_effect=URLError("pricing unavailable"),
             ),
         ):
-            assert _compute_cost("claude-sonnet-4-6", tokens) is None
+            assert _compute_cost("claude-sonnet-4.6", tokens) is None
 
 
 class TestKensaToOiMultiTool:
