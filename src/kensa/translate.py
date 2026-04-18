@@ -1,4 +1,4 @@
-"""OpenInference to kensa span translation."""
+"""OTel span to kensa span translation."""
 
 from __future__ import annotations
 
@@ -179,23 +179,23 @@ def _extract_metadata(attrs: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def oi_to_kensa(oi_span: dict[str, Any]) -> Span:
-    """Convert an OpenInference span dict to an kensa Span."""
-    attrs = oi_span.get("attributes", {})
+def span_to_kensa(otel_span: dict[str, Any]) -> Span:
+    """Convert an OTel span dict to a kensa Span."""
+    attrs = otel_span.get("attributes", {})
     kind = _extract_kind(attrs)
     tokens = _extract_tokens(attrs)
     model_name = _get(attrs, "llm.model_name")
     cost = _extract_declared_cost(attrs) or _compute_cost(model_name, tokens)
 
     return Span(
-        trace_id=str(oi_span.get("trace_id", "")),
-        span_id=str(oi_span.get("span_id", "")),
-        parent_span_id=oi_span.get("parent_span_id"),
-        name=oi_span.get("name", ""),
+        trace_id=str(otel_span.get("trace_id", "")),
+        span_id=str(otel_span.get("span_id", "")),
+        parent_span_id=otel_span.get("parent_span_id"),
+        name=otel_span.get("name", ""),
         kind=kind,
-        start_time=_parse_timestamp(oi_span.get("start_time", 0)),
-        end_time=_parse_timestamp(oi_span.get("end_time", 0)),
-        status=_extract_status(oi_span),
+        start_time=_parse_timestamp(otel_span.get("start_time", 0)),
+        end_time=_parse_timestamp(otel_span.get("end_time", 0)),
+        status=_extract_status(otel_span),
         model=model_name,
         provider=_get(attrs, "llm.provider"),
         input=_extract_io_payload(_get(attrs, "llm.input_messages"), _get(attrs, "input.value")),
@@ -207,8 +207,8 @@ def oi_to_kensa(oi_span: dict[str, Any]) -> Span:
     )
 
 
-def kensa_to_oi(span: Span) -> dict[str, Any]:
-    """Convert an kensa Span to an OpenInference-style dict."""
+def kensa_to_span(span: Span) -> dict[str, Any]:
+    """Convert a kensa Span to an OTel/OpenInference-style dict."""
     attrs: dict[str, Any] = {}
 
     attrs["openinference.span.kind"] = _KENSA_TO_OI_KIND.get(span.kind, "CHAIN")
@@ -270,3 +270,7 @@ def kensa_to_oi(span: Span) -> dict[str, Any]:
         "status": {"status_code": "ERROR" if span.status == "error" else "OK"},
         "attributes": attrs,
     }
+
+
+oi_to_kensa = span_to_kensa
+kensa_to_oi = kensa_to_span
