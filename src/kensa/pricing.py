@@ -1,4 +1,4 @@
-"""Model pricing helpers used for optional cost backfill."""
+"""Model pricing from OpenRouter."""
 
 from __future__ import annotations
 
@@ -14,9 +14,11 @@ _OPENROUTER_TIMEOUT = 2
 
 _MODEL_PRICES: dict[str, dict[str, float]] | None = None
 
+_DATE_SUFFIX_RE = re.compile(r"-(?:\d{8}|\d{4}-\d{2}-\d{2})$")
+_VERSION_DASH_RE = re.compile(r"(?<!\d)(\d)-(\d{1,2})(?!\d)")
+
 
 def fetch_openrouter_prices() -> dict[str, dict[str, float]]:
-    """Fetch live model prices from OpenRouter (free, no auth)."""
     with urllib.request.urlopen(_OPENROUTER_URL, timeout=_OPENROUTER_TIMEOUT) as resp:
         data = json.loads(resp.read())
     prices: dict[str, dict[str, float]] = {}
@@ -36,18 +38,10 @@ def fetch_openrouter_prices() -> dict[str, dict[str, float]]:
         if cache_read is not None:
             entry["cache_read_input_token_cost"] = float(cache_read)
         prices[short_id] = entry
-        dashed = short_id.replace(".", "-")
-        if dashed != short_id:
-            prices[dashed] = entry
     return prices
 
 
 def get_model_prices() -> dict[str, dict[str, float]]:
-    """Lazy-load prices from OpenRouter.
-
-    Pricing is optional enrichment. If the upstream lookup fails, cache an empty
-    mapping so trace translation can continue without cost backfill.
-    """
     global _MODEL_PRICES
     if _MODEL_PRICES is None:
         try:
@@ -63,18 +57,48 @@ def get_model_prices() -> dict[str, dict[str, float]]:
     return _MODEL_PRICES
 
 
-def compute_cost(
-    model: str | None,
-    tokens: TokenCounts | None,
-) -> CostInfo | None:
-    """Compute cost from tokens and model pricing. Returns None if unknown."""
+def candidate_slugs(model: str) -> list[str]:
+    if "/" in model:
+        model = model.split("/", 1)[-1]
+
+    seen: list[str] = []
+
+    def add(name: str) -> None:
+        if name and name not in seen:
+            seen.append(name)
+
+    add(model)
+
+    date_match = _DATE_SUFFIX_RE.search(model)
+    if date_match:
+        date_suffix = date_match.group(0)
+        base = model[: date_match.start()]
+    else:
+        date_suffix = ""
+        base = model
+
+    dotted_base = _VERSION_DASH_RE.sub(r"\1.\2", base)
+    dashed_base = base.replace(".", "-")
+
+    if date_suffix:
+        add(dotted_base + date_suffix)
+        add(dashed_base + date_suffix)
+    add(dotted_base)
+    add(base)
+    add(dashed_base)
+
+    return seen
+
+
+def compute_cost(model: str | None, tokens: TokenCounts | None) -> CostInfo | None:
     if model is None or tokens is None:
         return None
     prices = get_model_prices()
-    pricing = prices.get(model)
-    if pricing is None:
-        normalized = re.sub(r"-\d{8,}$", "", model)
-        pricing = prices.get(normalized)
+    pricing: dict[str, float] | None = None
+    for candidate in candidate_slugs(model):
+        pricing = prices.get(candidate)
+        if pricing is not None:
+            break
     if pricing is None:
         return None
 

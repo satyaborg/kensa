@@ -8,6 +8,7 @@ from urllib.error import URLError
 import pytest
 
 from kensa.models import Span, SpanKind, TokenCounts, ToolInfo
+from kensa.pricing import candidate_slugs
 from kensa.translate import (
     _compute_cost,
     _fetch_openrouter_prices,
@@ -555,7 +556,7 @@ class TestOiToKensaEdgeCases:
         assert "llm.token_count.cache_read" not in oi["attributes"]
 
 
-JUDGE_MODELS = ["claude-sonnet-4-6", "gpt-5.4-mini"]
+JUDGE_MODELS = ["claude-sonnet-4.6", "gpt-5.4-mini"]
 
 
 @pytest.mark.integration
@@ -581,12 +582,25 @@ class TestOpenRouterPricing:
                 f"{model} missing cache_read_input_token_cost"
             )
 
+    def test_or_prices_keyed_by_dotted_slug(self) -> None:
+        try:
+            prices = _fetch_openrouter_prices()
+        except URLError:
+            pytest.skip("OpenRouter unavailable in current environment")
+        assert "claude-sonnet-4.6" in prices
+        assert "claude-sonnet-4-6" not in prices
+
 
 MOCK_PRICES = {
-    "claude-sonnet-4-6": {
+    "claude-sonnet-4.6": {
         "input_cost_per_token": 3e-06,
         "output_cost_per_token": 1.5e-05,
         "cache_read_input_token_cost": 3e-07,
+    },
+    "claude-haiku-4.5": {
+        "input_cost_per_token": 1e-06,
+        "output_cost_per_token": 5e-06,
+        "cache_read_input_token_cost": 1e-07,
     },
     "gpt-5.4-mini": {
         "input_cost_per_token": 7.5e-07,
@@ -594,6 +608,88 @@ MOCK_PRICES = {
         "cache_read_input_token_cost": 7.5e-08,
     },
 }
+
+
+_REAL_OR_SLUGS = [
+    ("claude-sonnet-4-6", "claude-sonnet-4.6"),
+    ("claude-sonnet-4-6-20260217", "claude-sonnet-4.6"),
+    ("claude-opus-4-7", "claude-opus-4.7"),
+    ("claude-haiku-4-5", "claude-haiku-4.5"),
+    ("claude-haiku-4-5-20251001", "claude-haiku-4.5"),
+    ("claude-3-5-haiku-20241022", "claude-3.5-haiku"),
+    ("claude-3-7-sonnet", "claude-3.7-sonnet"),
+    ("claude-opus-4-6-fast", "claude-opus-4.6-fast"),
+    ("gpt-5.4-mini", "gpt-5.4-mini"),
+    ("gpt-4o", "gpt-4o"),
+    ("gpt-4o-mini", "gpt-4o-mini"),
+    ("gpt-4o-2024-08-06", "gpt-4o-2024-08-06"),
+    ("gpt-4o-mini-2024-07-18", "gpt-4o-mini-2024-07-18"),
+    ("gpt-4.1", "gpt-4.1"),
+    ("o1", "o1"),
+    ("o3-mini", "o3-mini"),
+    ("o4-mini", "o4-mini"),
+    ("llama-3.3-70b-instruct", "llama-3.3-70b-instruct"),
+    ("llama-3-3-70b-instruct", "llama-3.3-70b-instruct"),
+    ("llama-3.1-70b-instruct", "llama-3.1-70b-instruct"),
+    ("llama-3-1-70b-instruct", "llama-3.1-70b-instruct"),
+    ("llama-3-8b-instruct", "llama-3-8b-instruct"),
+    ("llama-3-70b-instruct", "llama-3-70b-instruct"),
+    ("llama-3.2-3b-instruct", "llama-3.2-3b-instruct"),
+    ("qwen-2.5-72b-instruct", "qwen-2.5-72b-instruct"),
+    ("qwen-2-5-72b-instruct", "qwen-2.5-72b-instruct"),
+    ("qwen-2-5-coder-32b-instruct", "qwen-2.5-coder-32b-instruct"),
+    ("gemini-2.5-flash", "gemini-2.5-flash"),
+    ("gemini-2-5-flash", "gemini-2.5-flash"),
+    ("gemini-2.5-pro", "gemini-2.5-pro"),
+    ("gemini-3-flash-preview", "gemini-3-flash-preview"),
+    ("mistral-small-3.1-24b-instruct", "mistral-small-3.1-24b-instruct"),
+    ("mistral-small-3-1-24b-instruct", "mistral-small-3.1-24b-instruct"),
+    ("mistral-medium-3.1", "mistral-medium-3.1"),
+    ("deepseek-chat-v3.1", "deepseek-chat-v3.1"),
+    ("grok-4.1-fast", "grok-4.1-fast"),
+    ("anthropic/claude-sonnet-4.6", "claude-sonnet-4.6"),
+    ("openai/gpt-5.4-mini", "gpt-5.4-mini"),
+    ("meta-llama/llama-3.3-70b-instruct", "llama-3.3-70b-instruct"),
+]
+
+
+class TestCandidateSlugs:
+    @pytest.mark.parametrize(("sdk_name", "or_slug"), _REAL_OR_SLUGS)
+    def test_resolves_to_or_slug(self, sdk_name: str, or_slug: str) -> None:
+        assert or_slug in candidate_slugs(sdk_name), (
+            f"{sdk_name!r} did not produce OR slug {or_slug!r}; got {candidate_slugs(sdk_name)}"
+        )
+
+    def test_version_dashes_do_not_mangle_size_segments(self) -> None:
+        assert "llama-3.3.70b-instruct" not in candidate_slugs("llama-3-3-70b-instruct")
+        assert "qwen-2.5.72b-instruct" not in candidate_slugs("qwen-2-5-72b-instruct")
+
+    def test_dashed_date_not_converted(self) -> None:
+        assert "gpt-4o-2024.08-06" not in candidate_slugs("gpt-4o-2024-08-06")
+        assert "gpt-4o-2024-08.06" not in candidate_slugs("gpt-4o-2024-08-06")
+
+    def test_dotted_dated_also_tries_dashed_dated(self) -> None:
+        candidates = candidate_slugs("gpt-5.4-mini-2026-03-17")
+        assert "gpt-5-4-mini-2026-03-17" in candidates
+        assert "gpt-5.4-mini-2026-03-17" in candidates
+        assert "gpt-5.4-mini" in candidates
+
+
+@pytest.mark.integration
+class TestCandidateSlugsAgainstLiveOpenRouter:
+    def test_every_sdk_form_resolves_in_live_prices(self) -> None:
+        try:
+            prices = _fetch_openrouter_prices()
+        except URLError:
+            pytest.skip("OpenRouter unavailable in current environment")
+        misses: list[tuple[str, str, list[str]]] = []
+        for sdk_name, expected_or_slug in _REAL_OR_SLUGS:
+            if expected_or_slug not in prices:
+                continue
+            candidates = candidate_slugs(sdk_name)
+            if not any(c in prices for c in candidates):
+                misses.append((sdk_name, expected_or_slug, candidates))
+        assert not misses, f"SDK names that failed to resolve in live OR prices: {misses}"
 
 
 class TestComputeCost:
@@ -635,6 +731,27 @@ class TestComputeCost:
         assert cost_full is not None
         assert cost_cached is not None
         assert cost_cached.total < cost_full.total
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_anthropic_dated_snapshot(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("claude-haiku-4-5-20251001", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 1e-06)
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_openai_dated_snapshot(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("gpt-5.4-mini-2026-03-17", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 7.5e-07)
+
+    @patch("kensa.pricing._MODEL_PRICES", MOCK_PRICES)
+    def test_provider_prefixed_model(self) -> None:
+        tokens = TokenCounts(prompt=1000, completion=500, total=1500)
+        cost = _compute_cost("anthropic/claude-sonnet-4.6", tokens)
+        assert cost is not None
+        assert cost.prompt == pytest.approx(1000 * 3e-06)
 
     def test_openrouter_failure_returns_none(self) -> None:
         tokens = TokenCounts(prompt=1000, completion=500, total=1500)
