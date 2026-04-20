@@ -1,0 +1,49 @@
+---
+title: Tracing & Instrumentation
+description: OpenTelemetry-based tracing with auto-instrumentation for major LLM providers.
+sidebarTitle: Tracing
+keywords:
+  - tracing
+  - instrumentation
+  - opentelemetry
+  - spans
+  - cache tokens
+---
+
+## Auto-instrumentation
+
+Zero code changes. kensa auto-instruments your agent at startup. Install the extra for your provider:
+
+```bash
+uv add "kensa[anthropic]"    # Anthropic
+uv add "kensa[openai]"       # OpenAI
+uv add "kensa[langchain]"    # LangChain
+uv add "kensa[all]"          # Everything
+```
+
+## What gets captured
+
+Each scenario runs in its own subprocess. kensa captures traces as JSONL and translates them to its internal format.
+
+Traces include:
+- LLM calls (model, tokens, cost, latency)
+- Tool invocations (name, arguments, results)
+- Span hierarchy (parent/child relationships)
+
+## Passive trace collection
+
+Collect traces outside of kensa's eval loop:
+
+```bash
+KENSA_TRACE_DIR=traces/ python my_agent.py
+```
+
+Feed them back later for trace-informed scenario generation.
+
+## OTel compatibility
+
+Spans are standard [OpenTelemetry](https://opentelemetry.io/), so anything that reads OTel spans can read them. kensa writes them as JSONL locally, which is what `kensa run` and `kensa analyze` consume.
+
+## Cache-aware cost tracking
+
+kensa reads `cache_read` token counts from spans and subtracts them from prompt token costs. Each scenario's cost reflects actual token usage, not cached replay. Cached tokens are tracked separately in the `TokenCounts` model and visible in reports.

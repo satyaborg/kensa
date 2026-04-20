@@ -1,0 +1,133 @@
+---
+title: Quickstart
+description: Get kensa running in under a minute.
+sidebarTitle: Quickstart
+keywords:
+  - quickstart
+  - install
+  - first eval
+  - skills
+  - kensa doctor
+---
+
+Get kensa running in under a minute.
+
+<Check>Recommended for most teams: install the cross-agent skills plus the CLI, then ask your coding agent to `evaluate this agent`.</Check>
+
+## Choose your setup
+
+<Columns cols={3}>
+  <Card title="Skills + CLI (recommended)">
+    Best for Codex, Cursor, OpenCode, Gemini CLI, and most local coding-agent workflows.
+  </Card>
+  <Card title="Claude Code plugin">
+    Use the Claude Code marketplace plugin if you want the same workflow packaged specifically for Claude Code.
+  </Card>
+  <Card title="CLI only">
+    Use the CLI directly if you want explicit control or you are integrating kensa into existing automation.
+  </Card>
+</Columns>
+
+## Recommended path: skills + CLI
+
+<Steps>
+  <Step title="Install the skills and CLI">
+    `npx skills add` installs the eval workflow skills. `uv add kensa` or `pip install kensa` adds the runtime that the skills call underneath.
+
+    <CodeGroup>
+    ```bash uv
+    npx skills add satyaborg/kensa
+    uv add kensa
+    ```
+
+    ```bash pip
+    npx skills add satyaborg/kensa
+    pip install kensa
+    ```
+    </CodeGroup>
+
+    If you primarily use Claude Code, the plugin is an equivalent install path:
+
+    ```bash title="Claude Code plugin"
+    /plugin marketplace add satyaborg/kensa
+    /plugin install kensa
+    ```
+  </Step>
+  <Step title="Install the provider extra that matches your stack">
+    kensa auto-instruments your agent at startup. Install the extra for the SDKs you use.
+
+    <CodeGroup>
+    ```bash Anthropic
+    uv add "kensa[anthropic]"
+    ```
+
+    ```bash OpenAI
+    uv add "kensa[openai]"
+    ```
+
+    ```bash LangChain
+    uv add "kensa[langchain]"
+    ```
+
+    ```bash Everything
+    uv add "kensa[all]"
+    ```
+    </CodeGroup>
+
+    If you installed with `pip`, use the same extras with `pip install "kensa[openai]"` and friends.
+
+    See [Tracing & Instrumentation](/tracing) for passive trace collection and OpenTelemetry compatibility details.
+  </Step>
+  <Step title="Verify the environment">
+    Run the doctor before you start iterating so you catch missing keys, missing scenario directories, or instrumentation issues early.
+
+    ```bash title="Project root"
+    kensa doctor
+    ```
+  </Step>
+  <Step title="Run your first eval">
+    Inside your coding agent, the happy path is just:
+
+    ```text title="Inside your coding agent"
+    > evaluate this agent
+    ```
+
+    If you want to drive the loop manually, start with:
+
+    ```bash title="Manual CLI path"
+    kensa eval
+    ```
+  </Step>
+</Steps>
+
+## What happens when you say "evaluate this agent"
+
+- `audit-evals` checks whether kensa is installed, whether scenarios already exist, and whether traces are available.
+- The skill picks the right next step: generate scenarios, reuse existing material, validate the judge, or run evals immediately.
+- The CLI handles execution, trace capture, judging, and reporting under the hood.
+
+## Try a known-good example
+
+```bash title="Try the SQL analyst example"
+git clone https://github.com/satyaborg/kensa.git && cd kensa
+uv sync --extra openai   # or --extra anthropic
+cd examples/sql-analyst
+```
+
+Then in your coding agent:
+
+```text title="Prompt"
+> evaluate this agent
+```
+
+## Prefer the CLI only?
+
+You can use kensa without skills if you want explicit control:
+
+```bash title="CLI only"
+kensa init
+kensa doctor
+kensa eval
+```
+
+Use [CLI Reference](/cli) for the full surface area, and [Workflows](/workflows) if you want to compare skills, CLI, MCP, and CI side by side.

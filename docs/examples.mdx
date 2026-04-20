@@ -1,0 +1,88 @@
+---
+title: Example Agents
+description: Five example agents covering domains where reliability matters.
+sidebarTitle: Examples
+mode: wide
+hideFooterPagination: true
+keywords:
+  - examples
+  - sql analyst
+  - incident triage
+  - customer support
+  - code reviewer
+---
+
+Each example in `examples/` demonstrates a different agent domain with realistic stakes. They are useful when you want to understand what good scenarios look like before pointing kensa at your own repo.
+
+<Tip>If you want the fastest demo, start with `examples/sql-analyst` or `examples/incident-triage`. They give you concrete tool use, measurable failure modes, and clear success criteria.</Tip>
+
+<Columns cols={2}>
+  <Card title="SQL Analyst">
+    **Domain:** Finance / BI
+
+    **Path:** `examples/sql-analyst`
+
+    Natural-language-to-SQL against a SQLite database. Great for catching hallucinated metrics, bad joins, and incorrect aggregations.
+  </Card>
+  <Card title="Incident Triage">
+    **Domain:** SRE
+
+    **Path:** `examples/incident-triage`
+
+    LangGraph ReAct agent that classifies severity with a runbook knowledge base. Great for paging logic, severity routing, and escalation behavior.
+  </Card>
+  <Card title="Code Reviewer">
+    **Domain:** Security
+
+    **Path:** `examples/code-reviewer`
+
+    Review agent that checks for ten vulnerability categories. Great for false-positive pressure and missed-critical-bug evaluation.
+  </Card>
+  <Card title="Customer Support">
+    **Domain:** CX
+
+    **Path:** `examples/customer-support`
+
+    Ticket classification and response with policy constraints. Great for routing, policy adherence, and tone-sensitive outputs.
+  </Card>
+  <Card title="SDR Qualifier">
+    **Domain:** Sales
+
+    **Path:** `examples/sdr-qualifier`
+
+    Lead-scoring and outreach agent with ICP segments and disqualification rules. Great for evaluating prioritization and follow-up judgment.
+  </Card>
+</Columns>
+
+## Pick the right example
+
+| If you want to test | Start with |
+|---|---|
+| SQL correctness and tool use | `examples/sql-analyst` |
+| Severity routing and runbook behavior | `examples/incident-triage` |
+| Security review quality | `examples/code-reviewer` |
+| Policy-aware support responses | `examples/customer-support` |
+| Qualification and outreach logic | `examples/sdr-qualifier` |
+
+## Run any example
+
+<Steps>
+  <Step title="Clone the repo and install dependencies">
+    ```bash title="Repository root"
+    git clone https://github.com/satyaborg/kensa.git && cd kensa
+    uv sync --extra anthropic   # or --extra openai
+    ```
+  </Step>
+  <Step title="Change into the example you want">
+    ```bash title="Pick an example"
+    cd examples/<agent-name>
+    ```
+  </Step>
+  <Step title="Ask your coding agent to evaluate it">
+    ```text title="Prompt"
+    > evaluate this agent
+    ```
+  </Step>
+</Steps>
+
+These examples are intentionally opinionated and high-stakes. They are meant to show where evals matter, not just provide toy demos.

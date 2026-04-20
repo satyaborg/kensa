@@ -1,0 +1,39 @@
+---
+title: Reference
+description: Detailed reference for scenario schema, checks, judge behavior, and trace capture.
+sidebarTitle: Reference
+mode: wide
+hideFooterPagination: true
+keywords:
+  - reference
+  - scenarios
+  - checks
+  - judge
+  - tracing
+---
+
+<Info>Use these pages when you already understand the high-level workflow and now need exact fields, flags, or evaluation semantics.</Info>
+
+<Columns cols={2}>
+  <Card title="Scenarios" href="/scenarios" cta="Open schema reference" arrow="true">
+    YAML schema, dataset-backed runs, `run_command`, `criteria`, `judge`, and trajectory examples.
+  </Card>
+  <Card title="Checks" href="/checks" cta="Compare check types" arrow="true">
+    Deterministic assertions for output, tool use, ordering, cost, turn count, duration, and repeated calls.
+  </Card>
+  <Card title="Judge" href="/judge" cta="See judge behavior" arrow="true">
+    Model resolution, inline criteria, reusable judge specs, and the fail-fast interaction with checks.
+  </Card>
+  <Card title="Tracing" href="/tracing" cta="See instrumentation details" arrow="true">
+    Auto-instrumentation, passive trace capture, OpenTelemetry compatibility, and cache-aware cost accounting.
+  </Card>
+</Columns>
+
+## Find the right page
+
+| If you need to | Go to |
+|---|---|
+| Write or debug a scenario file | [Scenarios](/scenarios) |
+| Choose the correct deterministic assertion | [Checks](/checks) |
+| Understand how natural-language criteria are judged | [Judge](/judge) |
+| Confirm what trace data kensa captures | [Tracing](/tracing) |

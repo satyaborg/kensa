@@ -1,0 +1,84 @@
+---
+title: Skills
+description: Five skills that orchestrate the complete evals workflow.
+sidebarTitle: Skills
+keywords:
+  - skills
+  - audit evals
+  - generate scenarios
+  - validate judge
+  - diagnose errors
+---
+
+Skills are what run when you say "evaluate my agent" in a coding agent like Claude Code. They orchestrate the eval workflow using kensa's CLI commands under the hood.
+
+## Installation
+
+```bash
+# Skills + CLI (recommended) — works with Codex, Cursor, OpenCode, Gemini CLI, and more
+npx skills add satyaborg/kensa
+uv add kensa
+
+# Or, for Claude Code, install as a plugin
+/plugin marketplace add satyaborg/kensa
+/plugin install kensa
+```
+
+## Lifecycle
+
+```
+Setup (audit-evals) → Design (generate-scenarios) → Calibrate (generate-judges)
+  → Validate (validate-judge) → Execute (kensa eval) → Diagnose (diagnose-errors) → Iterate
+```
+
+## /audit-evals
+
+**The default entry point.** Assesses readiness, identifies testable behaviors, and prepares the environment.
+
+What it does:
+- Checks kensa installation
+- Determines current state (scenarios exist? traces exist?)
+- Scans codebase for entry point, SDK, tools, behaviors, env vars
+- Verifies instrumentation with `kensa doctor`
+- Routes to the appropriate next skill
+
+## /generate-scenarios
+
+Generates test scenarios covering five categories:
+
+1. **Happy path** - expected behavior with valid inputs
+2. **Tool usage** - correct tool selection and ordering
+3. **Edge cases** - boundary conditions, unusual inputs
+4. **Error handling** - graceful failure, meaningful error messages
+5. **Cost/latency bounds** - resource usage stays within limits
+
+Outputs YAML files to `.kensa/scenarios/`.
+
+## /generate-judges
+
+Creates structured judge prompts for subjective evaluation criteria:
+
+- Binary pass/fail definitions (no Likert scales)
+- 2-4 few-shot examples with critiques
+- Designed for reuse across scenarios
+
+Outputs YAML specs to `.kensa/judges/`.
+
+## /validate-judge
+
+Tests judge accuracy against human-labeled examples:
+
+- Requires 8-20 labeled examples
+- Measures TPR (true positive rate) and TNR (true negative rate)
+- Target threshold: both ≥ 90%
+- Iterates on the judge prompt until thresholds are met
+- Optional bootstrap resampling for confidence intervals
+
+## /diagnose-errors
+
+Analyzes eval results after a run:
+
+- Categorizes failures: check failures, judge rejections, errors, uncertain
+- Reads `.kensa/results/` and `.kensa/traces/`
+- Identifies failure patterns across scenarios
+- Recommends next action: fix agent, improve judge, add scenarios, etc.
