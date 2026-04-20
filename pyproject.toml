@@ -100,8 +100,8 @@ all = "error"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 markers = [
-    "integration: requires external env such as API keys or transport permissions (deselect with '-m \"not integration\"')",
-    "client_process: spawns a separate MCP server process for end-to-end transport checks",
+    "integration: requires API keys (deselect with '-m \"not integration\"')",
+    "client_process: runs against a separate MCP server process",
 ]
 
 [tool.ruff]
