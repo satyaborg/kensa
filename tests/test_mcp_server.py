@@ -9,7 +9,9 @@ Three layers:
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
+import socket
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -20,7 +22,9 @@ pytest.importorskip("fastmcp")
 import yaml
 from click.testing import CliRunner
 from fastmcp import Client
+from fastmcp.client.transports import StreamableHttpTransport
 from fastmcp.exceptions import ResourceError, ToolError
+from fastmcp.utilities.tests import run_server_async
 
 from kensa.cli import cli
 from kensa.mcp_server import (
@@ -66,6 +70,15 @@ EXPECTED_TEMPLATES = {
 def _isolated(tmp_path: Path):
     """Fresh cwd inside tmp_path — paths.* all resolve relative to this."""
     return CliRunner().isolated_filesystem(temp_dir=tmp_path)
+
+
+def _loopback_bind_available() -> bool:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        try:
+            sock.bind(("127.0.0.1", 0))
+        except OSError:
+            return False
+    return True
 
 
 def _write_scenario(scenario_dir: Path, scenario_id: str, **overrides: object) -> None:
@@ -634,6 +647,17 @@ class TestMainEntryPoint:
         main()
         assert called == {"transport": "http", "host": "127.0.0.1", "port": 9000}
 
+    def test_main_defaults_to_stdio(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        called: dict[str, object] = {}
+
+        def fake_run_server(**kwargs: object) -> None:
+            called.update(kwargs)
+
+        monkeypatch.setattr("kensa.mcp_server.run_server", fake_run_server)
+        monkeypatch.setattr("sys.argv", ["kensa-mcp"])
+        main()
+        assert called == {"transport": "stdio", "host": "127.0.0.1", "port": 8765}
+
 
 class TestLauncher:
     def test_exits_with_hint_when_fastmcp_missing(
@@ -667,6 +691,45 @@ class TestLauncher:
         monkeypatch.setattr("kensa.mcp_server.main", fake_main)
         _mcp_launcher.main()
         assert called == [True]
+
+
+class TestTransportIntegration:
+    @pytest.mark.integration
+    def test_streamable_http_roundtrip(self, tmp_path: Path) -> None:
+        """Exercise the real HTTP transport without leaving the current process."""
+        if not _loopback_bind_available():
+            pytest.skip("loopback bind not available in this environment")
+
+        async def scenario() -> None:
+            async with (
+                run_server_async(mcp) as url,
+                Client(StreamableHttpTransport(url)) as client,
+            ):
+                assert await client.ping() is True
+
+                tools = await client.list_tools()
+                assert {t.name for t in tools} == EXPECTED_TOOLS
+
+                resources = await client.list_resources()
+                assert {str(r.uri) for r in resources} == EXPECTED_STATIC_RESOURCES
+
+                templates = await client.list_resource_templates()
+                assert {t.uriTemplate for t in templates} == EXPECTED_TEMPLATES
+
+                result = await client.call_tool("doctor", {})
+                dumped = dataclasses.asdict(result.data)
+                assert "ready" in dumped
+                assert "checks" in dumped
+
+                scenarios_res = await client.read_resource("kensa://scenarios")
+                assert scenarios_res[0].text in ("[]", "null")
+
+                err = await client.call_tool("run", {"scenario_dir": "/does/not/exist"})
+                err_data = dataclasses.asdict(err.data)
+                assert err_data.get("code") == "scenarios_missing"
+
+        with _isolated(tmp_path):
+            asyncio.run(scenario())
 
 
 @pytest.mark.integration

@@ -101,6 +101,7 @@ all = "error"
 testpaths = ["tests"]
 markers = [
     "integration: requires API keys (deselect with '-m \"not integration\"')",
+    "client_process: runs against a separate MCP server process",
 ]
 
 [tool.ruff]
