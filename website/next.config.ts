@@ -1,11 +1,25 @@
-import { createMDX } from "fumadocs-mdx/next";
 import type { NextConfig } from "next";
 
+const mintlifyDocsOrigin = process.env.MINTLIFY_DOCS_ORIGIN?.replace(/\/+$/, "");
+
 const nextConfig: NextConfig = {
-  output: "export",
   images: { unoptimized: true },
+  async rewrites() {
+    if (!mintlifyDocsOrigin) {
+      return [];
+    }
+
+    return [
+      {
+        source: "/docs",
+        destination: `${mintlifyDocsOrigin}/docs`,
+      },
+      {
+        source: "/docs/:path*",
+        destination: `${mintlifyDocsOrigin}/docs/:path*`,
+      },
+    ];
+  },
 };
 
-const withMDX = createMDX();
-
-export default withMDX(nextConfig);
+export default nextConfig;

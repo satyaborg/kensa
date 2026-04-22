@@ -1,14 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "ignoreCommand": "git diff HEAD^ HEAD --quiet .",
-  "rewrites": [
-    {
-      "source": "/docs",
-      "destination": "https://docs.kensa.sh"
-    },
-    {
-      "source": "/docs/:path*",
-      "destination": "https://docs.kensa.sh/:path*"
-    }
-  ]
+  "ignoreCommand": "git diff HEAD^ HEAD --quiet ."
 }

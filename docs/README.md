@@ -54,3 +54,13 @@ Each `.mdx` filename is the URL slug (e.g. `quickstart.mdx` → `/quickstart`).
 ## Deploying
 
 Connect this repository to Mintlify at [dashboard.mintlify.com](https://dashboard.mintlify.com) and point the deployment at `docs/`. Mintlify auto-deploys on push to the default branch.
+
+To serve the docs at `https://kensa.sh/docs` instead of a separate docs subdomain:
+
+1. Create the Mintlify project first and note its Mintlify subdomain from the dashboard URL (`dashboard.mintlify.com/<org>/<subdomain>`).
+2. In the Mintlify dashboard, open Custom domain setup and enable the `Host at /docs` toggle.
+3. Add `kensa.sh` as the domain in Mintlify.
+4. Set `MINTLIFY_DOCS_ORIGIN=https://<subdomain>.mintlify.dev` on the Vercel project that deploys `website/`.
+5. Deploy the Vercel project so `website/next.config.ts` can proxy `/docs` and `/docs/:path*` to `https://<subdomain>.mintlify.dev/docs`.
+
+Do not proxy `/docs` to `https://docs.kensa.sh` or any other custom domain root. Mintlify only emits the correct `/docs/...` URLs when the upstream request path also includes `/docs`.

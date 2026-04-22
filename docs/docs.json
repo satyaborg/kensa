@@ -74,64 +74,6 @@
       }
     ]
   },
-  "redirects": [
-    {
-      "source": "/docs",
-      "destination": "/"
-    },
-    {
-      "source": "/docs/index",
-      "destination": "/"
-    },
-    {
-      "source": "/docs/quickstart",
-      "destination": "/quickstart"
-    },
-    {
-      "source": "/docs/concepts",
-      "destination": "/concepts"
-    },
-    {
-      "source": "/docs/scenarios",
-      "destination": "/scenarios"
-    },
-    {
-      "source": "/docs/checks",
-      "destination": "/checks"
-    },
-    {
-      "source": "/docs/judge",
-      "destination": "/judge"
-    },
-    {
-      "source": "/docs/tracing",
-      "destination": "/tracing"
-    },
-    {
-      "source": "/docs/skills",
-      "destination": "/skills"
-    },
-    {
-      "source": "/docs/cli",
-      "destination": "/cli"
-    },
-    {
-      "source": "/docs/mcp",
-      "destination": "/mcp"
-    },
-    {
-      "source": "/docs/ci",
-      "destination": "/ci"
-    },
-    {
-      "source": "/docs/examples",
-      "destination": "/examples"
-    },
-    {
-      "source": "/docs/changelog",
-      "destination": "/changelog"
-    }
-  ],
   "navbar": {
     "links": [
       {
