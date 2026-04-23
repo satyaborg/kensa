@@ -213,7 +213,7 @@ class OpenAIJudge:
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=1024,
+            max_completion_tokens=1024,
         )
         text = response.choices[0].message.content or ""
         return _parse_judge_response(text)
