@@ -660,13 +660,21 @@ def generate(
         else:
             s.item("entrypoints: (none found; LLM may hallucinate — pass --run-command)", ok=False)
 
-        with s.spinner(f"Generating {count} scenarios..."):
+        import warnings
+
+        with (
+            s.spinner(f"Generating {count} scenarios..."),
+            warnings.catch_warnings(record=True) as caught,
+        ):
+            warnings.simplefilter("always")
             scenarios = generate_from_traces(
                 trace_paths,
                 count=count,
                 model=model,
                 run_commands=run_commands,
             )
+        for w in caught:
+            s.item(str(w.message), ok=False)
 
         if dry_run:
             from kensa.generate import _scenario_to_yaml

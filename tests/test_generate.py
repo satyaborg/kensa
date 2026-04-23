@@ -315,6 +315,122 @@ class TestGenerateCountEnforcement:
         assert scenarios[0].name == "first"
 
 
+class TestGeneratedCheckParams:
+    """Generator-strict check param validation (beyond Check.model_validator)."""
+
+    def _with_checks(self, checks: list[dict]) -> dict:
+        sd = _valid_scenario_dict("check_test")
+        sd["checks"] = checks
+        return sd
+
+    def test_rejects_max_turns_string(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+        sd = self._with_checks([{"type": "max_turns", "params": {"max": "5"}}])
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+        with pytest.raises(ValueError, match=r"max_turns.*numeric"):
+            generate_from_traces([trace], count=1)
+
+    def test_rejects_max_cost_bool(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+        sd = self._with_checks(
+            [
+                {"type": "max_cost", "params": {"max": True}},
+                {"type": "max_turns", "params": {"max": 5}},
+            ]
+        )
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+        with pytest.raises(ValueError, match=r"max_cost.*numeric"):
+            generate_from_traces([trace], count=1)
+
+    def test_rejects_empty_output_contains_value(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+        sd = self._with_checks(
+            [
+                {"type": "output_contains", "params": {"value": ""}},
+                {"type": "max_turns", "params": {"max": 5}},
+            ]
+        )
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+        with pytest.raises(ValueError, match=r"output_contains.*non-empty"):
+            generate_from_traces([trace], count=1)
+
+
+class TestRunCommandEnforcement:
+    def test_rewrites_run_command_when_single_observed(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """With one observed command, the LLM's run_command gets overwritten silently."""
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("drift")
+        sd["run_command"] = ["python", "wrong.py"]
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        observed = ["python", ".kensa/agents/real.py"]
+        scenarios = generate_from_traces([trace], count=1, run_commands=[observed])
+        assert scenarios[0].run_command == observed
+
+    def test_rejects_run_command_not_in_multi_allowlist(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("off_allowlist")
+        sd["run_command"] = ["python", "hallucinated.py"]
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        allowlist = [["python", "a.py"], ["python", "b.py"]]
+        with pytest.raises(ValueError, match="not in observed entrypoints"):
+            generate_from_traces([trace], count=1, run_commands=allowlist)
+
+    def test_accepts_run_command_in_multi_allowlist(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("on_allowlist")
+        sd["run_command"] = ["python", "b.py"]
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        allowlist = [["python", "a.py"], ["python", "b.py"]]
+        scenarios = generate_from_traces([trace], count=1, run_commands=allowlist)
+        assert scenarios[0].run_command == ["python", "b.py"]
+
+
+class TestUnderproductionWarning:
+    def test_warns_when_fewer_valid_than_requested(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        good = _valid_scenario_dict("good")
+        bad = _valid_scenario_dict("bad")
+        bad["run_command"] = []
+        fake = _FakeCompleter(json.dumps({"scenarios": [good, bad]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.warns(UserWarning, match="only 1 passed validation"):
+            scenarios = generate_from_traces([trace], count=2)
+        assert len(scenarios) == 1
+
+
 class TestWriteScenarios:
     def test_writes_new_files(self, tmp_path: Path) -> None:
         scenario = Scenario(**_valid_scenario_dict())

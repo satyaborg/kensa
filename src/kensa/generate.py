@@ -17,7 +17,7 @@ from typing import Any, cast
 
 import yaml
 
-from kensa.models import CheckType, RunManifest, Scenario, Span
+from kensa.models import Check, CheckType, RunManifest, Scenario, Span
 from kensa.paths import SCENARIO_DIR, latest_manifest, manifest_path
 
 MAX_TRACES_IN_PROMPT = 10
@@ -41,10 +41,46 @@ def _validate_scenario_id(scenario_id: str) -> str:
     return scenario_id
 
 
-def _validate_generated_scenario(scenario: Scenario) -> None:
+_NUMERIC_CHECK_PARAMS: dict[CheckType, tuple[str, ...]] = {
+    CheckType.MAX_COST: ("max", "max_usd"),
+    CheckType.MAX_TURNS: ("max",),
+    CheckType.MAX_DURATION: ("max_seconds",),
+}
+
+
+def _validate_generated_check_params(check: Check) -> None:
+    """Catch vacuous or wrong-typed params that model_validate allows (params is dict[str, Any])."""
+    if check.type in _NUMERIC_CHECK_PARAMS:
+        keys = _NUMERIC_CHECK_PARAMS[check.type]
+        present = {k: check.params[k] for k in keys if k in check.params}
+        if not present:
+            raise ValueError(f"{check.type.value}: missing numeric bound ({' or '.join(keys)})")
+        for key, value in present.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"{check.type.value}: '{key}' must be numeric, got {type(value).__name__}"
+                )
+    elif check.type == CheckType.OUTPUT_CONTAINS:
+        value = check.params.get("value")
+        if not isinstance(value, str) or not value.strip():
+            raise ValueError("output_contains: 'value' must be a non-empty string")
+    elif check.type == CheckType.OUTPUT_MATCHES:
+        pattern = check.params.get("pattern")
+        if not isinstance(pattern, str) or not pattern.strip():
+            raise ValueError("output_matches: 'pattern' must be a non-empty string")
+
+
+def _validate_generated_scenario(
+    scenario: Scenario, allowed_run_commands: list[list[str]] | None = None
+) -> None:
     """Stricter than Scenario.model_validate: generated scenarios must be runnable and testable."""
     if not scenario.run_command:
         raise ValueError("run_command is empty; generator requires an executable entrypoint")
+    if allowed_run_commands is not None and list(scenario.run_command) not in allowed_run_commands:
+        raise ValueError(
+            f"run_command {scenario.run_command} not in observed entrypoints "
+            f"{allowed_run_commands}; LLM hallucinated"
+        )
     if scenario.judge:
         raise ValueError(
             "generated scenarios must use 'criteria' (inline string), not 'judge' (file ref); "
@@ -59,6 +95,8 @@ def _validate_generated_scenario(scenario: Scenario) -> None:
         raise ValueError(
             "scenario must include at least one of max_cost or max_turns (prompt hard rule)"
         )
+    for check in scenario.checks:
+        _validate_generated_check_params(check)
 
 
 _SYSTEM_PROMPT = """\
@@ -412,6 +450,12 @@ def generate_from_traces(
     if not scenario_dicts:
         raise ValueError("LLM returned zero scenarios")
 
+    # run_commands started as a prompt hint; now also enforce it as an allowlist.
+    # With exactly one observed command, rewrite silently (the LLM's hint was right
+    # conceptually but the payload drifted). With multiple, reject mismatches.
+    single_run_command = run_commands[0] if run_commands and len(run_commands) == 1 else None
+    allowlist = run_commands if run_commands and len(run_commands) > 1 else None
+
     scenarios: list[Scenario] = []
     rejections: list[str] = []
     seen_ids: set[str] = set()
@@ -420,10 +464,12 @@ def generate_from_traces(
             rejections.append(f"#{i}: not a JSON object")
             continue
         sd.setdefault("source", "traces")
+        if single_run_command is not None:
+            sd["run_command"] = list(single_run_command)
         try:
             candidate = Scenario.model_validate(sd)
             _validate_scenario_id(candidate.id)
-            _validate_generated_scenario(candidate)
+            _validate_generated_scenario(candidate, allowed_run_commands=allowlist)
         except Exception as err:
             rejections.append(f"#{i} ({sd.get('id', '?')}): {err}")
             continue
@@ -439,14 +485,21 @@ def generate_from_traces(
             f"All {len(scenario_dicts)} LLM scenarios failed validation:\n  - {joined}"
         )
 
-    if len(scenarios) > count:
-        import warnings
+    import warnings
 
+    if len(scenarios) > count:
         warnings.warn(
             f"LLM returned {len(scenarios)} valid scenarios; capping to requested count={count}.",
             stacklevel=2,
         )
         scenarios = scenarios[:count]
+    elif len(scenarios) < count and rejections:
+        joined = "\n  - ".join(rejections)
+        warnings.warn(
+            f"Requested {count} scenarios but only {len(scenarios)} passed validation; "
+            f"{len(rejections)} rejected:\n  - {joined}",
+            stacklevel=2,
+        )
     return scenarios
 
 
