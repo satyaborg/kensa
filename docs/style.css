@@ -84,6 +84,13 @@
   border-radius: 0 !important;
 }
 
+#page-context-menu,
+#page-context-menu *,
+[role="menu"],
+[role="menu"] * {
+  border-radius: 0 !important;
+}
+
 #assistant-entry,
 #assistant-entry-mobile,
 .chat-assistant-floating-input {
