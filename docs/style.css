@@ -4,17 +4,19 @@
 }
 
 #topbar-cta-button a,
-#navbar a[href="https://kensa.sh"] {
+#navbar a[href="https://github.com/satyaborg/kensa"] {
   position: relative;
   overflow: hidden;
-  border-radius: 999px !important;
+  border-radius: 4px !important;
   transition:
     background 120ms ease,
     opacity 120ms ease;
 }
 
 #topbar-cta-button a {
-  padding: 0.62rem 1rem !important;
+  padding: 0.35rem 0.7rem !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.1 !important;
 }
 
 #topbar-cta-button a > span.absolute {

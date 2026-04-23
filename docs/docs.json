@@ -31,9 +31,6 @@
     "groups": [
       {
         "group": "Getting started",
-        "icon": "play",
-        "root": "getting-started",
-        "directory": "card",
         "pages": [
           "introduction",
           "quickstart",
@@ -43,9 +40,6 @@
       },
       {
         "group": "Reference",
-        "icon": "book-open",
-        "root": "reference",
-        "directory": "accordion",
         "pages": [
           "scenarios",
           "checks",
@@ -55,9 +49,6 @@
       },
       {
         "group": "Workflows",
-        "icon": "workflow",
-        "root": "workflows",
-        "directory": "card",
         "pages": [
           "skills",
           "cli",
@@ -67,7 +58,6 @@
       },
       {
         "group": "Releases",
-        "icon": "history",
         "pages": [
           "changelog"
         ]
@@ -75,23 +65,16 @@
     ]
   },
   "navbar": {
-    "links": [
-      {
-        "label": "GitHub",
-        "href": "https://github.com/satyaborg/kensa"
-      }
-    ],
     "primary": {
       "type": "button",
-      "label": "kensa.sh",
-      "href": "https://kensa.sh"
+      "label": "GitHub",
+      "href": "https://github.com/satyaborg/kensa"
     }
   },
   "footer": {
     "socials": {
       "github": "https://github.com/satyaborg/kensa",
-      "x": "https://x.com/kensa_sh",
-      "discord": "https://discord.gg/n77EqxUH"
+      "x": "https://x.com/kensa_sh"
     }
   },
   "seo": {
