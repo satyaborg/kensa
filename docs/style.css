@@ -1,37 +1,91 @@
+/* Selectors target Mintlify internals; re-check after any mint CLI upgrade. */
+
 :root {
   --kensa-bg: #090909;
   --kensa-text-strong: #f3f3f3;
+  --kensa-text: #cccccc;
+  --kensa-text-weak: #949494;
+  --kensa-surface: #121212;
+  --kensa-border: rgba(255, 255, 255, 0.12);
 }
 
-#topbar-cta-button a,
+.mdx-content .callout,
+.mdx-content .card,
+.mdx-content .code-block,
+.mdx-content pre,
+.mdx-content img,
+.mdx-content table,
+.mdx-content [class*="rounded-"],
+#sidebar [class*="rounded-"],
+#topbar [class*="rounded-"] {
+  border-radius: 0 !important;
+}
+
+.mdx-content pre,
+.mdx-content .code-block {
+  border-radius: 0 !important;
+  padding: 0 !important;
+}
+
+.mdx-content pre > code,
+.mdx-content .code-block > * {
+  border-radius: 0 !important;
+}
+
+.mdx-content code:not(pre code) {
+  border-radius: 0 !important;
+  padding: 1px 6px !important;
+  border: 1px solid var(--kensa-border) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+}
+
+.mdx-content blockquote {
+  border-left: 2px solid var(--kensa-border) !important;
+  border-radius: 0 !important;
+}
+
+.mdx-content hr {
+  border-color: var(--kensa-border) !important;
+}
+
+#navbar a[href="https://github.com/satyaborg/kensa"],
+#navbar a[href="https://github.com/satyaborg/kensa"] * {
+  border-radius: 0 !important;
+}
+
 #navbar a[href="https://github.com/satyaborg/kensa"] {
   position: relative;
   overflow: hidden;
-  border-radius: 4px !important;
+  padding: 0.35rem 0.7rem !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.1 !important;
   transition:
     background 120ms ease,
     opacity 120ms ease;
 }
 
-#topbar-cta-button a {
-  padding: 0.35rem 0.7rem !important;
-  font-size: 0.8125rem !important;
-  line-height: 1.1 !important;
-}
-
-#topbar-cta-button a > span.absolute {
+#navbar a[href="https://github.com/satyaborg/kensa"] > span.absolute {
   background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%) !important;
   opacity: 1 !important;
 }
 
-#topbar-cta-button a :is(span.z-10, svg) {
+#navbar a[href="https://github.com/satyaborg/kensa"] :is(span.z-10, span.text-white, svg) {
   color: var(--kensa-bg) !important;
 }
 
-#topbar-cta-button a:hover {
-  box-shadow: none !important;
+#navbar a[href="https://github.com/satyaborg/kensa"]:hover > span.absolute {
+  background: linear-gradient(135deg, #f3f3f3 0%, #dcdcdc 100%) !important;
 }
 
-#topbar-cta-button a:hover > span.absolute {
-  background: linear-gradient(135deg, #f3f3f3 0%, #dcdcdc 100%) !important;
+#search-bar-entry,
+#search-bar-entry-mobile,
+#search-bar-entry *,
+#search-bar-entry-mobile * {
+  border-radius: 0 !important;
+}
+
+#assistant-entry,
+#assistant-entry-mobile,
+.chat-assistant-floating-input {
+  display: none !important;
 }
