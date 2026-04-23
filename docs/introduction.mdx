@@ -12,9 +12,9 @@ keywords:
   - traces
 ---
 
-Kensa is the open source harness for evaluating coding agents with real execution traces, deterministic checks, and LLM-as-judge scoring.
+Eval your agents before they hit production. Kensa generates scenarios, auto-instruments traces, runs deterministic checks, and scores with an LLM judge. Run it from the CLI, your coding agent (Claude Code, Codex), or CI to catch regressions. Open source, local-first, framework agnostic, and OTel-compatible. Zero code changes to your first eval in minutes.
 
-<Check>If you want the fastest path to value, start with [Quickstart](/quickstart). Most teams can get to a first eval in a few minutes.</Check>
+<Check>Prefer the guided path? [Quickstart](/quickstart) walks you through installing the skills, CLI, and running your first eval.</Check>
 
 <Columns cols={2}>
   <Card title="Run your first eval" href="/quickstart" cta="Open quickstart" arrow="true">
@@ -23,7 +23,7 @@ Kensa is the open source harness for evaluating coding agents with real executio
   <Card title="Learn the mental model" href="/concepts" cta="Read concepts" arrow="true">
     Understand how scenarios, traces, checks, judges, and reports fit together.
   </Card>
-  <Card title="Pick a workflow" href="/workflows" cta="Compare workflows" arrow="true">
+  <Card title="Pick a workflow" href="/skills" cta="Start with skills" arrow="true">
     Start with skills, drop down to the CLI, wire up MCP, or gate changes in CI.
   </Card>
   <Card title="Try a realistic example" href="/examples" cta="Explore examples" arrow="true">
@@ -31,19 +31,24 @@ Kensa is the open source harness for evaluating coding agents with real executio
   </Card>
 </Columns>
 
-## What kensa does
+## How it works
 
-<Columns cols={3}>
-  <Card title="Generate scenarios">
-    Your coding agent can inspect the codebase and existing traces to write baseline or targeted scenarios in `.kensa/scenarios/`.
+<Columns cols={2}>
+  <Card title="Zero to eval">
+    Ask your coding agent to inspect the codebase and draft the first scenarios. You review evals instead of starting from a blank file.
   </Card>
-  <Card title="Capture execution traces">
-    Each scenario runs in its own subprocess, auto-instrumented with OpenTelemetry so kensa can see tool calls, latency, cost, and span structure.
+  <Card title="Runs become traces">
+    Kensa captures LLM calls, tool use, tokens, cost, and latency while your agent runs each scenario.
   </Card>
-  <Card title="Score outcomes">
-    Deterministic checks fail fast, and only then does the judge spend tokens on natural-language criteria when you need subjective evaluation.
+  <Card title="Checks gate judges">
+    Assertions run before LLM judges, catching obvious regressions without spending tokens.
+  </Card>
+  <Card title="Ship with evidence">
+    Get verdicts, traces, cost, latency, and failure details in terminal, Markdown, JSON, or HTML.
   </Card>
 </Columns>
+
+Each run leaves traces your coding agent can turn into sharper scenarios.
 
 ## Where to start
 
@@ -51,7 +56,7 @@ Kensa is the open source harness for evaluating coding agents with real executio
 |---|---|
 | Get running in under a minute | [Quickstart](/quickstart) |
 | Understand the mental model | [Concepts](/concepts) |
-| See the full eval workflow | [Workflows](/workflows) |
+| See the full eval workflow | [Skills](/skills) |
 | Look up exact commands | [CLI Reference](/cli) |
 | Drive kensa from an MCP client | [MCP Server](/mcp) |
 
@@ -95,4 +100,4 @@ Kensa works with any coding agent that can run shell commands and use skills, in
 
 ## License
 
-MIT. The only cost is LLM API calls for judge criteria, and that's optional.
+MIT.

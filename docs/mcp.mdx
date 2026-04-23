@@ -10,7 +10,8 @@ keywords:
   - codex
 ---
 
-Kensa ships an MCP server that exposes the eval workflow to any Model Context Protocol client — Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop, anything that speaks MCP. Tools are thin adapters over the same CLI surface, so `mcp.call_tool("eval")` runs the same pipeline as `kensa eval`.
+Call `kensa eval` from Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop, or any other MCP-aware client. Tools are thin adapters over the CLI surface, so `mcp.call_tool("eval")` runs the same pipeline as `kensa eval`.
+
 
 <Check>Use `uvx kensa-mcp` for the cleanest zero-install setup. Use `uv run kensa mcp` when you want the server version to exactly match the project dependency.</Check>
 
@@ -42,7 +43,7 @@ For Cursor, Codex, Claude Desktop, and other MCP clients, add this to the client
 }
 ```
 
-If your project already depends on kensa, skip the shim and use the built-in `kensa mcp` subcommand — it matches the version you have installed:
+If your project already depends on kensa, skip the shim and use the built-in `kensa mcp` subcommand (it matches the version you have installed):
 
 ```json title="Client config via project dependency"
 {
@@ -82,7 +83,7 @@ uvx kensa-mcp --http --port 8765    # streamable HTTP, localhost-only
 kensa mcp                           # same server, via the CLI subcommand (needs kensa[mcp])
 ```
 
-HTTP binds to `127.0.0.1` by default. Do not expose the HTTP transport on a public interface without a bearer token in front — the `run` and `eval` tools execute subprocesses with no auth of their own.
+HTTP binds to `127.0.0.1` by default. Do not expose the HTTP transport on a public interface without a bearer token in front. The `run` and `eval` tools execute subprocesses with no auth of their own.
 
 ## Tools
 
@@ -96,7 +97,7 @@ HTTP binds to `127.0.0.1` by default. Do not expose the HTTP transport on a publ
 | `report` | Render results in a chosen format | `ReportResponse` |
 | `analyze` | Cost/latency stats + anomaly flags | `Analysis` |
 
-Long-running tools (`run`, `judge`, `eval`) report progress over `ctx.report_progress` when the client provides a `Context`, and return a compact summary plus a resource URI pointing at full detail — fetch the resource only when you need it.
+Long-running tools (`run`, `judge`, `eval`) report progress over `ctx.report_progress` when the client provides a `Context`, and return a compact summary plus a resource URI pointing at full detail. Fetch the resource only when you need it.
 
 ## Resources
 
@@ -133,4 +134,4 @@ Tools never raise across the protocol boundary. Failures return a stable envelop
 | `run_not_found` | Referenced run has no manifest on disk |
 | `no_judge_key` | No judge API key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) set |
 | `invalid_run_id` | `run_id` failed path-safety validation |
-| `internal` | Uncategorised failure — surface the message to the user |
+| `internal` | Uncategorised failure, surface the message to the user |
