@@ -10,6 +10,7 @@ from types import SimpleNamespace
 import pytest
 
 from kensa.judge import (
+    OpenAIJudge,
     _build_trace_summary,
     _error_result_for_run,
     _extract_expected,
@@ -21,7 +22,6 @@ from kensa.judge import (
     judge_scenario,
     load_judge_prompt_spec,
     manifest_requires_judge,
-    OpenAIJudge,
 )
 from kensa.models import (
     JudgePromptExample,
