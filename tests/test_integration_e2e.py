@@ -1,8 +1,9 @@
 """End-to-end integration tests against real LLM APIs.
 
 Skips cleanly when API keys or instrumentor packages are missing. Skip with
-``pytest -m "not integration"``. Model overrides via ``KENSA_TEST_ANTHROPIC_MODEL``
-/ ``KENSA_TEST_OPENAI_MODEL``. Cost budget <$0.01 per full pass.
+``pytest -m "not integration"``. Model overrides via ``KENSA_TEST_ANTHROPIC_MODEL``,
+``KENSA_TEST_OPENAI_MODEL``, ``KENSA_TEST_ANTHROPIC_JUDGE_MODEL``, and
+``KENSA_TEST_OPENAI_JUDGE_MODEL``.
 """
 
 from __future__ import annotations
@@ -14,11 +15,24 @@ from pathlib import Path
 
 import pytest
 
-from kensa.models import Scenario, ScenarioSource, Span, SpanKind
+from kensa.judge import JudgeProvider
+from kensa.models import (
+    Check,
+    CheckType,
+    Result,
+    ResultStatus,
+    Scenario,
+    ScenarioSource,
+    Span,
+    SpanKind,
+)
 from kensa.runner import ensure_dotenv_loaded, read_trace, run_scenario
 
 _DEFAULT_ANTHROPIC_MODEL = "claude-haiku-4-5-20251001"
 _DEFAULT_OPENAI_MODEL = "gpt-5.4-mini"
+_GREETING_CRITERIA = (
+    "Pass only if the agent's final response is a greeting containing hi or hello. Fail otherwise."
+)
 
 
 def _anthropic_model() -> str:
@@ -27,6 +41,14 @@ def _anthropic_model() -> str:
 
 def _openai_model() -> str:
     return os.environ.get("KENSA_TEST_OPENAI_MODEL", _DEFAULT_OPENAI_MODEL)
+
+
+def _anthropic_judge_model() -> str:
+    return os.environ.get("KENSA_TEST_ANTHROPIC_JUDGE_MODEL", _anthropic_model())
+
+
+def _openai_judge_model() -> str:
+    return os.environ.get("KENSA_TEST_OPENAI_JUDGE_MODEL", _openai_model())
 
 
 def _has_any_instrumentor(sdk: str) -> bool:
@@ -73,6 +95,17 @@ def _run_agent(
     prompt: str,
     timeout: int = 60,
 ) -> list[Span]:
+    spans, _, _ = _run_agent_capture(tmp_path, agent_path, scenario_id, prompt, timeout)
+    return spans
+
+
+def _run_agent_capture(
+    tmp_path: Path,
+    agent_path: Path,
+    scenario_id: str,
+    prompt: str,
+    timeout: int = 60,
+) -> tuple[list[Span], str, str]:
     scenario = Scenario(
         id=scenario_id,
         name=scenario_id,
@@ -84,7 +117,42 @@ def _run_agent(
     trace_dir.mkdir(exist_ok=True)
     _, run = run_scenario(scenario, trace_dir=str(trace_dir), timeout=timeout)
     assert run.exit_code == 0, f"agent subprocess exited {run.exit_code}.\nstderr:\n{run.stderr}"
-    return read_trace(run.trace_path)
+    return read_trace(run.trace_path), run.trace_path, run.stdout
+
+
+def _judge_live_output(
+    tmp_path: Path,
+    agent_body: str,
+    run_scenario_id: str,
+    agent_prompt: str,
+    judge_provider: JudgeProvider,
+) -> Result:
+    from kensa.judge import judge_scenario
+
+    agent = _write_agent(tmp_path, agent_body)
+    spans, trace_path, stdout = _run_agent_capture(
+        tmp_path,
+        agent,
+        run_scenario_id,
+        agent_prompt,
+    )
+    scenario = Scenario(
+        id="live_judge_greeting",
+        name="Live judge greeting rubric",
+        source=ScenarioSource.CODE,
+        checks=[Check(type=CheckType.MAX_TURNS, params={"max": 5})],
+        criteria=_GREETING_CRITERIA,
+    )
+    result = judge_scenario(
+        scenario,
+        spans,
+        trace_path,
+        judge_provider=judge_provider,
+        stdout=stdout,
+    )
+    assert result.judge_result is not None, "judge result missing for scenario with criteria"
+    assert all(check.passed for check in result.check_results), result.check_results
+    return result
 
 
 _ANTHROPIC_SIMPLE_AGENT = """
@@ -260,6 +328,92 @@ class TestOpenaiEndToEnd:
         assert "get_weather" in tool_names, (
             f"get_weather tool call not extracted; tools across spans: {tool_names}"
         )
+
+
+@pytest.mark.integration
+class TestAnthropicJudgeEndToEnd:
+    def test_live_judge_passes_for_greeting_output(self, tmp_path: Path) -> None:
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        from kensa.judge import AnthropicJudge
+
+        result = _judge_live_output(
+            tmp_path,
+            _ANTHROPIC_SIMPLE_AGENT,
+            "anthropic_judge_pass",
+            "Reply with hello only.",
+            AnthropicJudge(model=_anthropic_judge_model()),
+        )
+
+        assert result.status == ResultStatus.PASS
+        assert result.judge_result is not None
+        assert result.judge_result.passed is True
+        assert result.judge_result.verdict == ResultStatus.PASS
+        assert result.judge_result.reasoning
+
+    def test_live_judge_fails_for_non_greeting_output(self, tmp_path: Path) -> None:
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        from kensa.judge import AnthropicJudge
+
+        result = _judge_live_output(
+            tmp_path,
+            _ANTHROPIC_SIMPLE_AGENT,
+            "anthropic_judge_fail",
+            "Reply with banana only.",
+            AnthropicJudge(model=_anthropic_judge_model()),
+        )
+
+        assert result.status == ResultStatus.FAIL
+        assert result.judge_result is not None
+        assert result.judge_result.passed is False
+        assert result.judge_result.verdict == ResultStatus.FAIL
+        assert result.judge_result.reasoning
+
+
+@pytest.mark.integration
+class TestOpenaiJudgeEndToEnd:
+    def test_live_judge_passes_for_greeting_output(self, tmp_path: Path) -> None:
+        _skip_unless_openai_ready()
+        os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
+
+        from kensa.judge import OpenAIJudge
+
+        result = _judge_live_output(
+            tmp_path,
+            _OPENAI_SIMPLE_AGENT,
+            "openai_judge_pass",
+            "Reply with hello only.",
+            OpenAIJudge(model=_openai_judge_model()),
+        )
+
+        assert result.status == ResultStatus.PASS
+        assert result.judge_result is not None
+        assert result.judge_result.passed is True
+        assert result.judge_result.verdict == ResultStatus.PASS
+        assert result.judge_result.reasoning
+
+    def test_live_judge_fails_for_non_greeting_output(self, tmp_path: Path) -> None:
+        _skip_unless_openai_ready()
+        os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
+
+        from kensa.judge import OpenAIJudge
+
+        result = _judge_live_output(
+            tmp_path,
+            _OPENAI_SIMPLE_AGENT,
+            "openai_judge_fail",
+            "Reply with banana only.",
+            OpenAIJudge(model=_openai_judge_model()),
+        )
+
+        assert result.status == ResultStatus.FAIL
+        assert result.judge_result is not None
+        assert result.judge_result.passed is False
+        assert result.judge_result.verdict == ResultStatus.FAIL
+        assert result.judge_result.reasoning
 
 
 @pytest.mark.integration
