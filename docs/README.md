@@ -1,6 +1,6 @@
 # Kensa Docs (Mintlify)
 
-These are the Kensa documentation pages, authored as MDX and served by [Mintlify](https://mintlify.com).
+Kensa's documentation pages, authored as MDX and served by [Mintlify](https://mintlify.com).
 
 ## Local preview
 
@@ -29,18 +29,15 @@ mint a11y
 
 ```
 docs/
-  docs.json            # navigation, redirects, theme, colors, SEO
+  docs.json            # navigation, theme, colors, SEO
   style.css            # site-wide Mintlify chrome overrides
-  getting-started.mdx  # section landing page
   introduction.mdx     # landing page of the docs (/)
   quickstart.mdx
   concepts.mdx
-  reference.mdx        # section landing page
   scenarios.mdx
   checks.mdx
   judge.mdx
   tracing.mdx
-  workflows.mdx        # section landing page
   skills.mdx
   cli.mdx
   mcp.mdx
@@ -53,14 +50,11 @@ Each `.mdx` filename is the URL slug (e.g. `quickstart.mdx` → `/quickstart`).
 
 ## Deploying
 
-Connect this repository to Mintlify at [dashboard.mintlify.com](https://dashboard.mintlify.com) and point the deployment at `docs/`. Mintlify auto-deploys on push to the default branch.
+Docs are served at `https://kensa.sh/docs` by proxying to a Mintlify project through the marketing site's Next.js rewrites.
 
-To serve the docs at `https://kensa.sh/docs` instead of a separate docs subdomain:
+1. Create the Mintlify project in the [Mintlify dashboard](https://dashboard.mintlify.com) and point it at this `docs/` directory. Note its Mintlify subdomain (`dashboard.mintlify.com/<org>/<subdomain>`).
+2. In the Mintlify dashboard, open Custom domain setup and enable the `Host at /docs` toggle, then add `kensa.sh` as the domain.
+3. Set `MINTLIFY_DOCS_ORIGIN=https://<subdomain>.mintlify.dev` on the Vercel project that deploys `website/`.
+4. Deploy the Vercel project. `website/next.config.ts` will proxy `/docs` and `/docs/:path*` to `https://<subdomain>.mintlify.dev/docs`.
 
-1. Create the Mintlify project first and note its Mintlify subdomain from the dashboard URL (`dashboard.mintlify.com/<org>/<subdomain>`).
-2. In the Mintlify dashboard, open Custom domain setup and enable the `Host at /docs` toggle.
-3. Add `kensa.sh` as the domain in Mintlify.
-4. Set `MINTLIFY_DOCS_ORIGIN=https://<subdomain>.mintlify.dev` on the Vercel project that deploys `website/`.
-5. Deploy the Vercel project so `website/next.config.ts` can proxy `/docs` and `/docs/:path*` to `https://<subdomain>.mintlify.dev/docs`.
-
-Do not proxy `/docs` to `https://docs.kensa.sh` or any other custom domain root. Mintlify only emits the correct `/docs/...` URLs when the upstream request path also includes `/docs`.
+The upstream request path must include `/docs` for Mintlify to emit correct `/docs/...` URLs, which is why the proxy targets `${MINTLIFY_DOCS_ORIGIN}/docs` rather than the origin root.
