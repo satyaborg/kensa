@@ -477,6 +477,52 @@ class TestGenerateEndToEnd:
         assert reloaded.id == generated.id
         assert reloaded.run_command == run_command
 
+    def test_generated_scenario_roundtrips_through_runner(self, tmp_path: Path) -> None:
+        """Seed → generate → re-run → checks. Closes the generate pipeline loop."""
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+        prompt = "Say hello."
+
+        seed = Scenario(
+            id="seed",
+            name="Seed",
+            source=ScenarioSource.CODE,
+            input=prompt,
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.checks import run_checks
+        from kensa.generate import generate_from_traces
+
+        scenarios = generate_from_traces(
+            [Path(seed_run.trace_path)],
+            count=1,
+            run_commands=[run_command],
+        )
+        assert scenarios, "live generator returned no valid scenarios"
+        generated = scenarios[0]
+
+        _, generated_run = run_scenario(generated, trace_dir=str(trace_dir))
+        assert generated_run.exit_code == 0, (
+            f"generated scenario failed to execute:\n{generated_run.stderr}"
+        )
+
+        spans = read_trace(generated_run.trace_path)
+        assert spans, "generated scenario produced no spans"
+
+        check_dicts = [c.model_dump(mode="json") for c in generated.checks]
+        check_results = run_checks(spans, check_dicts)
+        assert len(check_results) == len(generated.checks), (
+            "run_checks dropped or duplicated a check"
+        )
+
 
 @pytest.mark.integration
 class TestLlmCompleterEndToEnd:
