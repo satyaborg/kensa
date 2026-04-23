@@ -523,6 +523,82 @@ class TestGenerateEndToEnd:
             "run_checks dropped or duplicated a check"
         )
 
+    def test_generate_from_openai_trace(self, tmp_path: Path) -> None:
+        """Same pipeline as Anthropic, but through the OpenAI provider."""
+        _skip_unless_openai_ready()
+        os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+        agent_path = _write_agent(tmp_path, _OPENAI_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+
+        seed = Scenario(
+            id="seed_openai",
+            name="Seed OpenAI",
+            source=ScenarioSource.CODE,
+            input="Say hello.",
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.generate import generate_from_traces
+
+        scenarios = generate_from_traces(
+            [Path(seed_run.trace_path)],
+            count=1,
+            run_commands=[run_command],
+        )
+        assert scenarios, "openai generator returned no valid scenarios"
+        assert scenarios[0].run_command == run_command
+        assert scenarios[0].checks
+
+    def test_cli_generate_end_to_end(self, tmp_path: Path) -> None:
+        """kensa generate CLI wires resolve_trace_paths + completer + write together."""
+        from click.testing import CliRunner
+
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+
+        seed = Scenario(
+            id="seed_cli",
+            name="Seed CLI",
+            source=ScenarioSource.CODE,
+            input="Say hello.",
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.cli import cli
+
+        scenarios_dir = tmp_path / "scenarios"
+        result = CliRunner().invoke(
+            cli,
+            [
+                "generate",
+                "--trace",
+                seed_run.trace_path,
+                "-n",
+                "1",
+                "--scenario-dir",
+                str(scenarios_dir),
+                "--run-command",
+                " ".join(run_command),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        written = list(scenarios_dir.glob("*.yaml"))
+        assert len(written) == 1, f"expected 1 scenario file, got {written}"
+        assert "1 written" in result.output
+
 
 @pytest.mark.integration
 class TestLlmCompleterEndToEnd:
