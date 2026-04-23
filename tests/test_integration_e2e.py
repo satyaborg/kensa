@@ -480,12 +480,7 @@ class TestGenerateEndToEnd:
 
 @pytest.mark.integration
 class TestLlmCompleterEndToEnd:
-    """Live LLM round-trips through the Completer classes.
-
-    Uses ``max_tokens=50`` and one-line prompts on both providers. At haiku /
-    gpt-5.4-mini list prices, total cost across these four tests lands in the
-    sub-cent range, well under the $0.10 budget for the integration suite.
-    """
+    """Live Completer round-trips; sub-cent total at haiku / gpt-5.4-mini prices."""
 
     @staticmethod
     def _skip_unless_anthropic_sdk() -> None:

@@ -1,10 +1,4 @@
-"""Provider-agnostic LLM client helpers.
-
-Shared plumbing for ``judge.py`` and ``generate.py``: client construction with
-friendly install hints, the provider priority tree (``KENSA_JUDGE_MODEL`` →
-Anthropic key → OpenAI key), and a free-form ``Completer`` protocol for
-callers that need a one-shot text completion rather than a judge verdict.
-"""
+"""Shared LLM client + provider resolution for ``judge.py`` and ``generate.py``."""
 
 from __future__ import annotations
 
@@ -47,14 +41,7 @@ def _openai_client() -> Any:
 
 
 def resolve_provider(model: str | None = None) -> tuple[Provider, str | None]:
-    """Return ``(provider, model_override)`` for an LLM call.
-
-    Shared by ``judge.get_judge`` and ``get_completer``. Priority:
-    ``KENSA_JUDGE_MODEL`` env var → ``ANTHROPIC_API_KEY`` → ``OPENAI_API_KEY``.
-    Loads ``.env`` walking up from cwd so subprocess and parent see the same
-    keys. Returns ``None`` for the model override when we're falling back to
-    the provider's built-in default.
-    """
+    """Pick provider by priority: KENSA_JUDGE_MODEL, ANTHROPIC_API_KEY, OPENAI_API_KEY."""
     from kensa.runner import ensure_dotenv_loaded
 
     ensure_dotenv_loaded()

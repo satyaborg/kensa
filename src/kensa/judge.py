@@ -258,12 +258,7 @@ def _parse_judge_response(text: str) -> JudgeResult:
 
 
 def get_judge(model: str | None = None) -> JudgeProvider:
-    """Resolve which judge provider to use.
-
-    Delegates to ``kensa.llm.resolve_provider`` so judge and completer share
-    one priority tree. The resolver raises when no provider is configured;
-    catch and re-phrase for the judge-specific error surface.
-    """
+    """Resolve a judge provider; re-phrases ``llm.resolve_provider`` errors."""
     from kensa.llm import resolve_provider
 
     try:

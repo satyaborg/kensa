@@ -42,13 +42,7 @@ def _validate_scenario_id(scenario_id: str) -> str:
 
 
 def _validate_generated_scenario(scenario: Scenario) -> None:
-    """Enforce generator-only invariants beyond Scenario.model_validate.
-
-    The base Scenario model defaults run_command and checks to empty lists so it
-    can represent dataset-driven or partial scenarios. Generated scenarios have
-    stricter requirements: they must be runnable out of the box and must either
-    check something deterministically or state a judge criterion.
-    """
+    """Stricter than Scenario.model_validate: generated scenarios must be runnable and testable."""
     if not scenario.run_command:
         raise ValueError("run_command is empty; generator requires an executable entrypoint")
     if scenario.judge:
