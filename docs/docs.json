@@ -1,0 +1,87 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "kensa",
+  "description": "Kensa is the open source harness for evaluating your agents.",
+  "appearance": {
+    "default": "dark",
+    "strict": true
+  },
+  "icons": {
+    "library": "lucide"
+  },
+  "metadata": {
+    "timestamp": true
+  },
+  "styling": {
+    "eyebrows": "breadcrumbs"
+  },
+  "colors": {
+    "primary": "#090909",
+    "light": "#f3f3f3",
+    "dark": "#949494"
+  },
+  "favicon": "/favicon.png",
+  "logo": {
+    "light": "/logo/light.svg",
+    "dark": "/logo/dark.svg",
+    "href": "/"
+  },
+  "navigation": {
+    "groups": [
+      {
+        "group": "Getting started",
+        "pages": [
+          "introduction",
+          "quickstart",
+          "concepts",
+          "examples"
+        ]
+      },
+      {
+        "group": "Reference",
+        "pages": [
+          "scenarios",
+          "checks",
+          "judge",
+          "tracing"
+        ]
+      },
+      {
+        "group": "Workflows",
+        "pages": [
+          "skills",
+          "cli",
+          "mcp",
+          "ci"
+        ]
+      },
+      {
+        "group": "Releases",
+        "pages": [
+          "changelog"
+        ]
+      }
+    ]
+  },
+  "navbar": {
+    "primary": {
+      "type": "button",
+      "label": "GitHub",
+      "href": "https://github.com/satyaborg/kensa"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/satyaborg/kensa",
+      "x": "https://x.com/kensa_sh"
+    }
+  },
+  "seo": {
+    "metatags": {
+      "og:site_name": "Kensa docs",
+      "twitter:site": "@kensa_sh"
+    },
+    "indexing": "all"
+  }
+}

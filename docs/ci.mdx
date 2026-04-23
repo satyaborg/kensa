@@ -1,11 +1,20 @@
 ---
 title: CI Integration
 description: Run kensa in continuous integration pipelines.
+sidebarTitle: CI
+keywords:
+  - ci
+  - github actions
+  - pull request
+  - markdown report
+  - evals
 ---
+
+<Note>Start with deterministic checks in CI even if you do not want to spend judge tokens on every push. Add judge keys only when you want natural-language gating.</Note>
 
 ## GitHub Actions
 
-```yaml
+```yaml title=".github/workflows/eval.yml"
 # .github/workflows/eval.yml
 name: Evals
 on: [push]
@@ -47,7 +56,7 @@ This means you can run cost, latency, tool ordering, and output matching checks 
 
 Pipe markdown output to a PR comment:
 
-```yaml
+```yaml title="PR comment step"
 - name: Run evals
   run: uv run kensa eval --format markdown > eval-report.md
 

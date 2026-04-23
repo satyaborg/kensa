@@ -1,14 +1,21 @@
 ---
 title: Skills
 description: Five skills that orchestrate the complete evals workflow.
+sidebarTitle: Skills
+keywords:
+  - skills
+  - audit evals
+  - generate scenarios
+  - validate judge
+  - diagnose errors
 ---
 
-Skills are what run when you say "evaluate my agent" in a coding agent like Claude Code. They orchestrate the eval workflow using kensa's CLI commands under the hood.
+Say "evaluate my agent" in Claude Code or any skill-aware coding agent, and one of five skills picks the next step: audit setup, generate scenarios, validate the judge, run, or diagnose failures. Each skill drives the CLI under the hood.
 
 ## Installation
 
 ```bash
-# Skills + CLI (recommended) — works with Codex, Cursor, OpenCode, Gemini CLI, and more
+# Skills + CLI (recommended): works with Codex, Cursor, OpenCode, Gemini CLI, and more
 npx skills add satyaborg/kensa
 uv add kensa
 

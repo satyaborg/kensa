@@ -1,0 +1,103 @@
+---
+title: Introduction
+description: Kensa is the open source harness for evaluating your agents.
+sidebarTitle: Introduction
+mode: wide
+hideFooterPagination: true
+keywords:
+  - agent evals
+  - coding agents
+  - llm judge
+  - deterministic checks
+  - traces
+---
+
+Eval your agents before they hit production. Kensa generates scenarios, auto-instruments traces, runs deterministic checks, and scores with an LLM judge. Run it from the CLI, your coding agent (Claude Code, Codex), or CI to catch regressions. Open source, local-first, framework agnostic, and OTel-compatible. Zero code changes to your first eval in minutes.
+
+<Check>Prefer the guided path? [Quickstart](/quickstart) walks you through installing the skills, CLI, and running your first eval.</Check>
+
+<Columns cols={2}>
+  <Card title="Run your first eval" href="/quickstart" cta="Open quickstart" arrow="true">
+    Install kensa, add the provider extra that matches your stack, and evaluate a real repo.
+  </Card>
+  <Card title="Learn the mental model" href="/concepts" cta="Read concepts" arrow="true">
+    Understand how scenarios, traces, checks, judges, and reports fit together.
+  </Card>
+  <Card title="Pick a workflow" href="/skills" cta="Start with skills" arrow="true">
+    Start with skills, drop down to the CLI, wire up MCP, or gate changes in CI.
+  </Card>
+  <Card title="Try a realistic example" href="/examples" cta="Explore examples" arrow="true">
+    Use one of the included example agents to see the full loop on a codebase with real stakes.
+  </Card>
+</Columns>
+
+## How it works
+
+<Columns cols={2}>
+  <Card title="Zero to eval">
+    Ask your coding agent to inspect the codebase and draft the first scenarios. You review evals instead of starting from a blank file.
+  </Card>
+  <Card title="Runs become traces">
+    Kensa captures LLM calls, tool use, tokens, cost, and latency while your agent runs each scenario.
+  </Card>
+  <Card title="Checks gate judges">
+    Assertions run before LLM judges, catching obvious regressions without spending tokens.
+  </Card>
+  <Card title="Ship with evidence">
+    Get verdicts, traces, cost, latency, and failure details in terminal, Markdown, JSON, or HTML.
+  </Card>
+</Columns>
+
+Each run leaves traces your coding agent can turn into sharper scenarios.
+
+## Where to start
+
+| If you want to | Go to |
+|---|---|
+| Get running in under a minute | [Quickstart](/quickstart) |
+| Understand the mental model | [Concepts](/concepts) |
+| See the full eval workflow | [Skills](/skills) |
+| Look up exact commands | [CLI Reference](/cli) |
+| Drive kensa from an MCP client | [MCP Server](/mcp) |
+
+## Why teams use it
+
+- Cold-start friendly: kensa can start from code understanding even when you have no labels and no existing eval harness.
+- Trace-informed iteration: previous runs become input for better scenarios instead of dead artifacts.
+- Cost-aware by default: checks gate the expensive judge call, so obvious failures do not spend tokens.
+- Works with existing tooling: use it through skills, the CLI, MCP, or CI depending on how your team already operates.
+
+## It gets smarter each run
+
+Feed traces from previous runs back in, and kensa generates scenarios targeting real failure modes instead of educated guesses.
+
+```text title="Eval loop"
+Run 1 (cold-start):    code → baseline scenarios → traces (1)
+Run 2 (with traces):   code + traces (1) → better scenarios → traces (2)
+Run 3:                 code + traces (1,2) → even better scenarios
+```
+
+## Data flow
+
+```mermaid
+flowchart LR
+  A["<code>.kensa/scenarios/*.yaml</code>"] --> B["Subprocess run<br/>(auto-instrumented)"]
+  B --> C["OTel spans<br/>→ JSONL traces"]
+  C --> D["Deterministic<br/>checks"]
+  D --> E["LLM judge<br/><em>(if criteria set)</em>"]
+  E --> F["Report<br/>terminal / MD / JSON / HTML"]
+```
+
+Each scenario runs in its own subprocess. kensa auto-instruments the agent's LLM SDK, captures spans as JSONL, and translates them to its internal format.
+
+Checks are deterministic, cheap, and fast. They gate the expensive LLM judge call. If a check fails, the scenario fails immediately without spending tokens.
+
+A scenario passes only when **all checks pass and the judge passes**. If a deterministic check fails, the judge is skipped and no extra tokens are spent.
+
+## Compatible coding agents
+
+Kensa works with any coding agent that can run shell commands and use skills, including Claude Code, Codex, Cursor, OpenCode, and Gemini CLI.
+
+## License
+
+MIT.

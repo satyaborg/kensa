@@ -1,0 +1,37 @@
+:root {
+  --kensa-bg: #090909;
+  --kensa-text-strong: #f3f3f3;
+}
+
+#topbar-cta-button a,
+#navbar a[href="https://github.com/satyaborg/kensa"] {
+  position: relative;
+  overflow: hidden;
+  border-radius: 4px !important;
+  transition:
+    background 120ms ease,
+    opacity 120ms ease;
+}
+
+#topbar-cta-button a {
+  padding: 0.35rem 0.7rem !important;
+  font-size: 0.8125rem !important;
+  line-height: 1.1 !important;
+}
+
+#topbar-cta-button a > span.absolute {
+  background: linear-gradient(135deg, #ffffff 0%, #e8e8e8 100%) !important;
+  opacity: 1 !important;
+}
+
+#topbar-cta-button a :is(span.z-10, svg) {
+  color: var(--kensa-bg) !important;
+}
+
+#topbar-cta-button a:hover {
+  box-shadow: none !important;
+}
+
+#topbar-cta-button a:hover > span.absolute {
+  background: linear-gradient(135deg, #f3f3f3 0%, #dcdcdc 100%) !important;
+}

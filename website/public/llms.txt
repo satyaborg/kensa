@@ -144,5 +144,4 @@ Five example agents in `examples/`, each targeting a domain where reliability ma
 ## Links
 
 - [GitHub](https://github.com/satyaborg/kensa): Source and documentation
-- [Discord](https://discord.gg/n77EqxUH): Community
 - [X](https://x.com/kensa_sh): Updates
