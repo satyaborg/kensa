@@ -202,6 +202,119 @@ class TestGenerateFromTraces:
             generate_from_traces([trace], count=1)
 
 
+class TestGeneratorValidation:
+    """Generator-specific invariants beyond Scenario.model_validate."""
+
+    def test_rejects_empty_run_command(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("no_cmd")
+        sd["run_command"] = []
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.raises(ValueError, match="run_command is empty"):
+            generate_from_traces([trace], count=1)
+
+    def test_rejects_no_checks_and_no_criteria(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("noop")
+        sd["checks"] = []
+        sd["criteria"] = None
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.raises(ValueError, match="no checks and no judge criterion"):
+            generate_from_traces([trace], count=1)
+
+    def test_rejects_missing_cost_and_turn_bounds(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("unbounded")
+        sd["checks"] = [
+            {"type": "output_contains", "params": {"value": "Tokyo"}, "description": "x"},
+        ]
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.raises(ValueError, match="max_cost or max_turns"):
+            generate_from_traces([trace], count=1)
+
+    def test_rejects_judge_file_reference(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """generate does not write judge prompt files, so judge: refs would dangle."""
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("judge_ref")
+        sd.pop("criteria", None)
+        sd["judge"] = "some_judge_name"
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.raises(ValueError, match="must use 'criteria'"):
+            generate_from_traces([trace], count=1)
+
+    def test_accepts_criteria_only_scenario(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A scenario with criteria but no deterministic checks still needs bounds."""
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        sd = _valid_scenario_dict("criteria_only")
+        sd["checks"] = [{"type": "max_turns", "params": {"max": 5}, "description": "bound"}]
+        sd["criteria"] = "Agent responds politely."
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        scenarios = generate_from_traces([trace], count=1)
+        assert scenarios[0].id == "criteria_only"
+
+
+class TestGenerateCountEnforcement:
+    def test_caps_overproduction_to_count(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        dicts = [_valid_scenario_dict(f"s{i}") for i in range(5)]
+        fake = _FakeCompleter(json.dumps({"scenarios": dicts}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.warns(UserWarning, match="capping"):
+            scenarios = generate_from_traces([trace], count=2)
+        assert len(scenarios) == 2
+        assert [s.id for s in scenarios] == ["s0", "s1"]
+
+    def test_deduplicates_ids(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        first = _valid_scenario_dict("dup")
+        first["name"] = "first"
+        second = _valid_scenario_dict("dup")
+        second["name"] = "second"
+        fake = _FakeCompleter(json.dumps({"scenarios": [first, second]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        scenarios = generate_from_traces([trace], count=2)
+        assert len(scenarios) == 1
+        assert scenarios[0].name == "first"
+
+
 class TestWriteScenarios:
     def test_writes_new_files(self, tmp_path: Path) -> None:
         scenario = Scenario(**_valid_scenario_dict())

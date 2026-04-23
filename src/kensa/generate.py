@@ -17,7 +17,7 @@ from typing import Any, cast
 
 import yaml
 
-from kensa.models import RunManifest, Scenario, Span
+from kensa.models import CheckType, RunManifest, Scenario, Span
 from kensa.paths import SCENARIO_DIR, latest_manifest, manifest_path
 
 MAX_TRACES_IN_PROMPT = 10
@@ -39,6 +39,32 @@ def _validate_scenario_id(scenario_id: str) -> str:
             "(no path separators, dots, or whitespace)."
         )
     return scenario_id
+
+
+def _validate_generated_scenario(scenario: Scenario) -> None:
+    """Enforce generator-only invariants beyond Scenario.model_validate.
+
+    The base Scenario model defaults run_command and checks to empty lists so it
+    can represent dataset-driven or partial scenarios. Generated scenarios have
+    stricter requirements: they must be runnable out of the box and must either
+    check something deterministically or state a judge criterion.
+    """
+    if not scenario.run_command:
+        raise ValueError("run_command is empty; generator requires an executable entrypoint")
+    if scenario.judge:
+        raise ValueError(
+            "generated scenarios must use 'criteria' (inline string), not 'judge' (file ref); "
+            "generate does not create judge prompt files"
+        )
+    if not scenario.checks and not scenario.criteria:
+        raise ValueError(
+            "scenario has no checks and no judge criterion; it would pass automatically"
+        )
+    check_types = {check.type for check in scenario.checks}
+    if CheckType.MAX_COST not in check_types and CheckType.MAX_TURNS not in check_types:
+        raise ValueError(
+            "scenario must include at least one of max_cost or max_turns (prompt hard rule)"
+        )
 
 
 _SYSTEM_PROMPT = """\
@@ -394,6 +420,7 @@ def generate_from_traces(
 
     scenarios: list[Scenario] = []
     rejections: list[str] = []
+    seen_ids: set[str] = set()
     for i, sd in enumerate(scenario_dicts):
         if not isinstance(sd, dict):
             rejections.append(f"#{i}: not a JSON object")
@@ -402,15 +429,30 @@ def generate_from_traces(
         try:
             candidate = Scenario.model_validate(sd)
             _validate_scenario_id(candidate.id)
-            scenarios.append(candidate)
+            _validate_generated_scenario(candidate)
         except Exception as err:
             rejections.append(f"#{i} ({sd.get('id', '?')}): {err}")
+            continue
+        if candidate.id in seen_ids:
+            rejections.append(f"#{i} ({candidate.id}): duplicate id")
+            continue
+        seen_ids.add(candidate.id)
+        scenarios.append(candidate)
 
     if not scenarios:
         joined = "\n  - ".join(rejections) or "(no diagnostic)"
         raise ValueError(
             f"All {len(scenario_dicts)} LLM scenarios failed validation:\n  - {joined}"
         )
+
+    if len(scenarios) > count:
+        import warnings
+
+        warnings.warn(
+            f"LLM returned {len(scenarios)} valid scenarios; capping to requested count={count}.",
+            stacklevel=2,
+        )
+        scenarios = scenarios[:count]
     return scenarios
 
 

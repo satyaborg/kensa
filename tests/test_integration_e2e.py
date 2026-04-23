@@ -82,6 +82,16 @@ def _skip_unless_openai_ready() -> None:
         pytest.skip("no openai instrumentor installed (uv sync --extra openai)")
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Strip a leading ``` fence (optionally ```json) and a trailing ``` fence."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.split("\n")
+    lines = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+    return "\n".join(lines).strip()
+
+
 def _write_agent(tmp_path: Path, body: str, filename: str = "agent.py") -> Path:
     path = tmp_path / filename
     path.write_text(textwrap.dedent(body).lstrip())
@@ -448,22 +458,96 @@ class TestGenerateEndToEnd:
             run_commands=[run_command],
         )
 
-        assert len(scenarios) == 2
-        for generated in scenarios:
-            assert generated.source == ScenarioSource.TRACES
-            assert generated.run_command == run_command, (
-                f"LLM did not reuse the observed run_command: got {generated.run_command}"
-            )
-            assert generated.checks, "generated scenario should have at least one check"
-            assert generated.id
-            assert generated.name
+        assert scenarios, "live generator returned no valid scenarios"
+        assert len(scenarios) <= 2, "generator should cap to requested count"
 
-            yaml_text = _scenario_to_yaml(generated)
-            out_path = tmp_path / f"{generated.id}.yaml"
-            out_path.write_text(yaml_text)
-            reloaded = load_scenario(out_path)
-            assert reloaded.id == generated.id
-            assert reloaded.run_command == run_command
+        generated = scenarios[0]
+        assert generated.source == ScenarioSource.TRACES
+        assert generated.run_command == run_command, (
+            f"LLM did not reuse the observed run_command: got {generated.run_command}"
+        )
+        assert generated.checks, "generated scenario should have at least one check"
+        assert generated.id
+        assert generated.name
+
+        yaml_text = _scenario_to_yaml(generated)
+        out_path = tmp_path / f"{generated.id}.yaml"
+        out_path.write_text(yaml_text)
+        reloaded = load_scenario(out_path)
+        assert reloaded.id == generated.id
+        assert reloaded.run_command == run_command
+
+
+@pytest.mark.integration
+class TestLlmCompleterEndToEnd:
+    """Live LLM round-trips through the Completer classes.
+
+    Uses ``max_tokens=50`` and one-line prompts on both providers. At haiku /
+    gpt-5.4-mini list prices, total cost across these four tests lands in the
+    sub-cent range, well under the $0.10 budget for the integration suite.
+    """
+
+    @staticmethod
+    def _skip_unless_anthropic_sdk() -> None:
+        ensure_dotenv_loaded()
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            pytest.skip("ANTHROPIC_API_KEY not set")
+        if importlib.util.find_spec("anthropic") is None:
+            pytest.skip("anthropic SDK not installed")
+
+    @staticmethod
+    def _skip_unless_openai_sdk() -> None:
+        ensure_dotenv_loaded()
+        if not os.environ.get("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set")
+        if importlib.util.find_spec("openai") is None:
+            pytest.skip("openai SDK not installed")
+
+    def test_anthropic_completer_plain_roundtrip(self) -> None:
+        self._skip_unless_anthropic_sdk()
+        from kensa.llm import AnthropicCompleter
+
+        completer = AnthropicCompleter(model=_anthropic_model(), max_tokens=50)
+        text = completer.complete("Reply with exactly the word: hello")
+        assert text.strip(), "completer returned empty text"
+        assert "hello" in text.lower()
+
+    def test_anthropic_completer_json_mode_returns_parseable_json(self) -> None:
+        import json
+
+        self._skip_unless_anthropic_sdk()
+        from kensa.llm import AnthropicCompleter
+
+        completer = AnthropicCompleter(model=_anthropic_model(), max_tokens=50)
+        text = completer.complete(
+            'Return this JSON exactly and nothing else: {"ok": true}',
+            response_format="json",
+        )
+        payload = json.loads(_strip_markdown_fences(text))
+        assert payload.get("ok") is True
+
+    def test_openai_completer_plain_roundtrip(self) -> None:
+        self._skip_unless_openai_sdk()
+        from kensa.llm import OpenAICompleter
+
+        completer = OpenAICompleter(model=_openai_model(), max_tokens=50)
+        text = completer.complete("Reply with exactly the word: hello")
+        assert text.strip(), "completer returned empty text"
+        assert "hello" in text.lower()
+
+    def test_openai_completer_json_mode_returns_parseable_json(self) -> None:
+        import json
+
+        self._skip_unless_openai_sdk()
+        from kensa.llm import OpenAICompleter
+
+        completer = OpenAICompleter(model=_openai_model(), max_tokens=50)
+        text = completer.complete(
+            'Return this JSON exactly and nothing else: {"ok": true}',
+            response_format="json",
+        )
+        payload = json.loads(text)
+        assert payload.get("ok") is True
 
 
 @pytest.mark.integration

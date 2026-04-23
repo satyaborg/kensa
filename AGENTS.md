@@ -39,6 +39,10 @@ kensa report --format json                               # machine-readable
 kensa report --format html                               # standalone HTML file
 kensa eval                                               # run + judge + report in one shot
 kensa eval -s <name>                                     # eval specific scenario
+kensa generate                                           # synthesize scenarios from latest run's traces
+kensa generate --run-id <id>                             # synthesize from a specific run
+kensa generate --trace path/to/trace.jsonl -n 5          # synthesize N scenarios from a trace file
+kensa generate --dry-run                                 # print generated YAML without writing
 kensa analyze                                            # cost/latency stats + anomaly flags
 kensa mcp                                                # serve kensa over MCP (stdio transport)
 kensa mcp --http --port 8765                             # MCP over HTTP on localhost
@@ -76,14 +80,16 @@ report.py          ← models only
 styles.py          ← models only
 aggregate.py       ← models only (multi-run variance/flaky detection)
 analyzer.py        ← models + runner + trace_semantics + utils
-judge.py           ← models + checks + utils + paths (lazy: runner)
+judge.py           ← models + checks + utils + paths (lazy: runner, llm)
 runner.py          ← models + paths + translate
 doctor.py          ← paths + utils (lazy: runner, styles)
 exporter.py        ← stdlib + opentelemetry only (JSONL span exporter, no kensa imports)
 scaffold.py        ← paths only (idempotent .kensa/ scaffolding, shared by CLI and MCP)
+llm.py             ← stdlib only (Completer protocol + Anthropic/OpenAI adapters; shared client + provider resolution; lazy: utils, runner)
+generate.py        ← models + paths (lazy: runner, utils, llm; scenario synthesis from traces)
 mcp_server.py      ← models + paths (lazy: runner, judge, report, analyzer, doctor, scaffold)
 _mcp_launcher.py   ← stdlib only (clean install-hint wrapper around mcp_server.main; consumed by the kensa-mcp shim package)
-cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server)
+cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server, generate)
 ```
 
 No circular deps. `models.py` is imported by everything. `utils.py` is the most shared utility (checks, judge, analyzer, doctor).
