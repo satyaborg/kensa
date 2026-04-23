@@ -16,6 +16,17 @@
   "styling": {
     "eyebrows": "breadcrumbs"
   },
+  "contextual": {
+    "options": [
+      "copy",
+      "view",
+      "chatgpt",
+      "claude",
+      "perplexity",
+      "cursor",
+      "vscode"
+    ]
+  },
   "colors": {
     "primary": "#090909",
     "light": "#f3f3f3",
