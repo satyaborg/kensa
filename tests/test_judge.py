@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,6 +21,7 @@ from kensa.judge import (
     judge_scenario,
     load_judge_prompt_spec,
     manifest_requires_judge,
+    OpenAIJudge,
 )
 from kensa.models import (
     JudgePromptExample,
@@ -304,6 +307,37 @@ class TestGetJudge:
             assert isinstance(judge, OpenAIJudge)
         except (ImportError, Exception):
             pass  # OK if openai not installed
+
+
+class TestOpenAIJudge:
+    def test_uses_max_completion_tokens(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        captured: dict[str, object] = {}
+
+        class FakeCompletions:
+            def create(self, **kwargs: object) -> object:
+                captured.update(kwargs)
+                return SimpleNamespace(
+                    choices=[
+                        SimpleNamespace(
+                            message=SimpleNamespace(
+                                content='{"verdict": "pass", "reasoning": "ok", "evidence": []}'
+                            )
+                        )
+                    ]
+                )
+
+        fake_openai = SimpleNamespace(
+            OpenAI=lambda: SimpleNamespace(chat=SimpleNamespace(completions=FakeCompletions()))
+        )
+        monkeypatch.setitem(sys.modules, "openai", fake_openai)
+
+        judge = OpenAIJudge(model="gpt-5.4-mini")
+        result = judge.judge("Test prompt")
+
+        assert result.verdict == ResultStatus.PASS
+        assert captured["model"] == "gpt-5.4-mini"
+        assert captured["max_completion_tokens"] == 1024
+        assert "max_tokens" not in captured
 
 
 class TestManifestRequiresJudge:
