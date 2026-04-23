@@ -46,7 +46,17 @@ def _get_version() -> str:
         return "dev"
 
 
-_COMMAND_ORDER = ["init", "doctor", "run", "judge", "report", "eval", "analyze", "mcp"]
+_COMMAND_ORDER = [
+    "init",
+    "generate",
+    "doctor",
+    "run",
+    "judge",
+    "report",
+    "eval",
+    "analyze",
+    "mcp",
+]
 
 
 class KensaGroup(click.Group):
@@ -561,6 +571,134 @@ def init(force: bool, blank: bool) -> None:
 
     s.line()
     s.end()
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  kensa generate                       # from latest run's traces
+  kensa generate --run-id abc123
+  kensa generate --trace path/to/trace.jsonl -n 5
+  kensa generate --dry-run""",
+)
+@click.option("--run-id", default=None, help="Run ID to source traces from (default: latest).")
+@click.option(
+    "--trace",
+    "traces",
+    multiple=True,
+    type=click.Path(exists=True, path_type=Path),
+    help="Specific trace file(s); repeatable. Overrides --run-id.",
+)
+@click.option(
+    "-n",
+    "--count",
+    default=3,
+    show_default=True,
+    type=click.IntRange(1, 20),
+    help="Number of scenarios to generate.",
+)
+@click.option("--model", default=None, help="LLM model override (e.g. claude-sonnet-4-6).")
+@click.option("--dry-run", is_flag=True, help="Print YAML to stdout; do not write files.")
+@click.option("--force", is_flag=True, help="Overwrite existing scenario files.")
+@click.option(
+    "--scenario-dir",
+    default=str(SCENARIO_DIR),
+    help="Where to write generated scenarios.",
+)
+@click.option(
+    "--run-command",
+    "run_command_overrides",
+    multiple=True,
+    help="Entrypoint argv to hint to the LLM (repeatable; quote to pass multiple args: "
+    "--run-command 'python .kensa/agents/agent.py').",
+)
+def generate(
+    run_id: str | None,
+    traces: tuple[Path, ...],
+    count: int,
+    model: str | None,
+    dry_run: bool,
+    force: bool,
+    scenario_dir: str,
+    run_command_overrides: tuple[str, ...],
+) -> None:
+    """Generate eval scenarios from existing traces."""
+    import shlex
+
+    from kensa.generate import (
+        collect_run_commands,
+        generate_from_traces,
+        resolve_trace_paths,
+        write_scenarios,
+    )
+
+    if run_id:
+        _validate_run_id(run_id)
+
+    s = Steps()
+    s.start("kensa generate")
+    try:
+        trace_paths = resolve_trace_paths(run_id, traces)
+        s.item(f"traces: {len(trace_paths)}")
+
+        if run_command_overrides:
+            run_commands: list[list[str]] | None = [
+                shlex.split(rc) for rc in run_command_overrides if rc.strip()
+            ]
+        else:
+            run_commands = (
+                collect_run_commands(
+                    run_id,
+                    Path(scenario_dir),
+                    trace_paths=list(trace_paths) if traces else None,
+                )
+                or None
+            )
+
+        if run_commands:
+            s.item(f"entrypoints: {len(run_commands)}")
+        else:
+            s.item("entrypoints: (none found; LLM may hallucinate — pass --run-command)", ok=False)
+
+        with s.spinner(f"Generating {count} scenarios..."):
+            scenarios = generate_from_traces(
+                trace_paths,
+                count=count,
+                model=model,
+                run_commands=run_commands,
+            )
+
+        if dry_run:
+            from kensa.generate import _scenario_to_yaml
+
+            s.line()
+            for scenario in scenarios:
+                click.echo("---")
+                click.echo(_scenario_to_yaml(scenario), nl=False)
+            click.echo("---")
+            s.line()
+            s.result(f"[bold]{len(scenarios)} scenario(s) generated (dry run)[/bold]")
+            s.end()
+            return
+
+        written, skipped = write_scenarios(
+            scenarios,
+            force=force,
+            scenario_dir=Path(scenario_dir),
+        )
+        for path in written:
+            s.item(f"wrote {path}")
+        for path in skipped:
+            s.item(f"skipped {path} (exists; use --force to overwrite)", ok=False)
+        s.line()
+        s.result(f"[bold]{len(written)} written, {len(skipped)} skipped[/bold]")
+        s.end()
+    except FileNotFoundError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
+    except Exception as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
 
 
 @cli.command()

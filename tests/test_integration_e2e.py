@@ -417,6 +417,56 @@ class TestOpenaiJudgeEndToEnd:
 
 
 @pytest.mark.integration
+class TestGenerateEndToEnd:
+    def test_generate_from_real_trace_produces_executable_scenarios(self, tmp_path: Path) -> None:
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+        prompt = "Classify this ticket priority as P1, P2, or P3: Our checkout is down."
+
+        scenario = Scenario(
+            id="seed",
+            name="Seed",
+            source=ScenarioSource.CODE,
+            input=prompt,
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(scenario, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+        trace_path = Path(seed_run.trace_path)
+
+        from kensa.generate import _scenario_to_yaml, generate_from_traces
+        from kensa.runner import load_scenario
+
+        scenarios = generate_from_traces(
+            [trace_path],
+            count=2,
+            run_commands=[run_command],
+        )
+
+        assert len(scenarios) == 2
+        for generated in scenarios:
+            assert generated.source == ScenarioSource.TRACES
+            assert generated.run_command == run_command, (
+                f"LLM did not reuse the observed run_command: got {generated.run_command}"
+            )
+            assert generated.checks, "generated scenario should have at least one check"
+            assert generated.id
+            assert generated.name
+
+            yaml_text = _scenario_to_yaml(generated)
+            out_path = tmp_path / f"{generated.id}.yaml"
+            out_path.write_text(yaml_text)
+            reloaded = load_scenario(out_path)
+            assert reloaded.id == generated.id
+            assert reloaded.run_command == run_command
+
+
+@pytest.mark.integration
 class TestChecksAgainstRealSpans:
     def test_tools_called_check_sees_real_tool_call(self, tmp_path: Path) -> None:
         _skip_unless_anthropic_ready()
