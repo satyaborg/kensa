@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import functools
 import json
-import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Protocol
@@ -167,20 +166,12 @@ class AnthropicJudge:
     """Judge using Anthropic's Claude API."""
 
     def __init__(self, model: str = "claude-sonnet-4-6") -> None:
-        try:
-            import anthropic
-        except ImportError as err:
-            from kensa.utils import install_hint
+        from kensa.llm import _anthropic_client
 
-            raise ImportError(
-                "anthropic package required for Anthropic judge. "
-                f"Install with: {install_hint('anthropic')}"
-            ) from err
-        self.client = anthropic.Anthropic()
+        self.client = _anthropic_client()
         self.model = model
 
     def judge(self, prompt: str) -> JudgeResult:
-
         response = self.client.messages.create(
             model=self.model,
             max_tokens=1024,
@@ -198,15 +189,9 @@ class OpenAIJudge:
     """Judge using OpenAI's API."""
 
     def __init__(self, model: str = "gpt-5.4-mini") -> None:
-        try:
-            import openai
-        except ImportError as err:
-            from kensa.utils import install_hint
+        from kensa.llm import _openai_client
 
-            raise ImportError(
-                f"openai package required for OpenAI judge. Install with: {install_hint('openai')}"
-            ) from err
-        self.client = openai.OpenAI()
+        self.client = _openai_client()
         self.model = model
 
     def judge(self, prompt: str) -> JudgeResult:
@@ -275,35 +260,20 @@ def _parse_judge_response(text: str) -> JudgeResult:
 def get_judge(model: str | None = None) -> JudgeProvider:
     """Resolve which judge provider to use.
 
-    Loads .env (walking up from cwd) so the judge process has the same
-    env vars as the runner subprocess.
-
-    Priority: KENSA_JUDGE_MODEL env var → ANTHROPIC_API_KEY → OPENAI_API_KEY → error.
+    Delegates to ``kensa.llm.resolve_provider`` so judge and completer share
+    one priority tree. The resolver raises when no provider is configured;
+    catch and re-phrase for the judge-specific error surface.
     """
-    from kensa.runner import ensure_dotenv_loaded
+    from kensa.llm import resolve_provider
 
-    ensure_dotenv_loaded()
+    try:
+        provider, resolved_model = resolve_provider(model)
+    except RuntimeError as err:
+        raise RuntimeError(str(err).replace("No LLM provider", "No judge model")) from err
 
-    model_override = model or os.environ.get("KENSA_JUDGE_MODEL")
-
-    if model_override:
-        if "claude" in model_override or "anthropic" in model_override.lower():
-            return AnthropicJudge(model=model_override)
-        return OpenAIJudge(model=model_override)
-
-    if os.environ.get("ANTHROPIC_API_KEY"):
-        return AnthropicJudge()
-
-    if os.environ.get("OPENAI_API_KEY"):
-        return OpenAIJudge()
-
-    raise RuntimeError(
-        "No judge model available. Set one of:\n"
-        "  KENSA_JUDGE_MODEL=<model>  (explicit model)\n"
-        "  ANTHROPIC_API_KEY=<key>     (uses claude-sonnet-4-6)\n"
-        "  OPENAI_API_KEY=<key>        (uses gpt-5.4-mini)\n"
-        "Keys can be in a .env file (searched up from cwd) or exported."
-    )
+    if provider == "anthropic":
+        return AnthropicJudge(model=resolved_model) if resolved_model else AnthropicJudge()
+    return OpenAIJudge(model=resolved_model) if resolved_model else OpenAIJudge()
 
 
 def _build_trace_summary(spans: list[Span], trace_path: str) -> TraceSummary:
