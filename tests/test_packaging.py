@@ -20,7 +20,7 @@ def _extract_pyproject_version(pyproject_path: Path) -> str:
 def _extract_editable_lock_version(lock_path: Path, package_name: str) -> str:
     text = lock_path.read_text()
     pattern = re.compile(
-        rf'^\[\[package\]\]\n'
+        rf"^\[\[package\]\]\n"
         rf'name = "{re.escape(package_name)}"\n'
         rf'version = "([^"]+)"\n'
         r'source = \{ editable = "\." \}',
