@@ -17,6 +17,7 @@ from kensa.generate import (
     _parse_response,
     _scenario_to_yaml,
     _validate_scenario_id,
+    collect_noinput_commands,
     collect_run_commands,
     generate_from_traces,
     resolve_trace_paths,
@@ -1114,3 +1115,100 @@ class TestCliGenerate:
             assert not list(source_dir.glob("weather_happy*")), (
                 "scenario written into source dir instead of --scenario-dir"
             )
+
+
+class TestNoinputCommands:
+    """Per-command replay semantics: input is nulled only for matching argvs."""
+
+    def test_collect_only_returns_no_i_captures(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            traces_dir = Path(".kensa/traces")
+            runs_dir.mkdir(parents=True)
+            traces_dir.mkdir(parents=True)
+            trace_nocap = traces_dir / "nocap.jsonl"
+            trace_withcap = traces_dir / "withcap.jsonl"
+            trace_nocap.write_text("")
+            trace_withcap.write_text("")
+
+            (runs_dir / "no_i.json").write_text(
+                RunManifest(
+                    run_id="no_i",
+                    timestamp=datetime(2026, 4, 22, tzinfo=timezone.utc),
+                    kind=RunKind.CAPTURE,
+                    command=["python", "agent.py", "baked prompt"],
+                    trace_path=str(trace_nocap),
+                    exit_code=0,
+                    duration_seconds=1.0,
+                    span_count=1,
+                ).model_dump_json()
+            )
+            (runs_dir / "with_i.json").write_text(
+                RunManifest(
+                    run_id="with_i",
+                    timestamp=datetime(2026, 4, 22, 12, 0, 1, tzinfo=timezone.utc),
+                    kind=RunKind.CAPTURE,
+                    command=["python", "agent.py"],
+                    captured_input="explicit prompt",
+                    trace_path=str(trace_withcap),
+                    exit_code=0,
+                    duration_seconds=1.0,
+                    span_count=1,
+                ).model_dump_json()
+            )
+
+            noinput = collect_noinput_commands(
+                run_id=None,
+                trace_paths=[trace_nocap, trace_withcap],
+            )
+            assert noinput == [["python", "agent.py", "baked prompt"]]
+
+    def test_input_nulled_only_for_matching_argv(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Mixed LLM output: scenario matching noinput loses input; the other keeps it."""
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        baked = ["python", "agent.py", "baked prompt"]
+        clean = ["python", "agent.py"]
+        baked_scenario = {**_valid_scenario_dict("baked"), "run_command": baked}
+        clean_scenario = {**_valid_scenario_dict("clean"), "run_command": clean}
+        fake = _FakeCompleter(json.dumps({"scenarios": [baked_scenario, clean_scenario]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        scenarios = generate_from_traces(
+            [trace],
+            count=2,
+            run_commands=[baked, clean],
+            noinput_commands=[baked],
+        )
+        by_id = {s.id: s for s in scenarios}
+        assert by_id["baked"].input in (None, "")
+        assert by_id["clean"].input == _valid_scenario_dict()["input"]
+
+    def test_explicit_run_command_override_preserves_input_for_no_i_capture(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The CLI's --run-command path builds noinput_commands=[]; scenario.input survives.
+
+        Guards against the regression where a global verbatim_replay flag
+        forced input=None even when the user had normalized the capture's
+        argv back to a clean skeleton.
+        """
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        override = ["python", "agent.py"]
+        sd = {**_valid_scenario_dict("from_override"), "run_command": override}
+        fake = _FakeCompleter(json.dumps({"scenarios": [sd]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        scenarios = generate_from_traces(
+            [trace],
+            count=1,
+            run_commands=[override],
+            noinput_commands=None,
+        )
+        assert scenarios[0].input == _valid_scenario_dict()["input"]

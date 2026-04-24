@@ -5,6 +5,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+
+class CaptureOnlyWorkspaceError(FileNotFoundError):
+    """Raised when the only runs on disk are captures, not evals.
+
+    Callers in CLI/MCP should pattern-match on this to surface capture-first
+    guidance (``kensa generate``) instead of the generic ``kensa run`` hint.
+    """
+
+
 ROOT = Path(".kensa")
 SCENARIO_DIR = ROOT / "scenarios"
 TRACE_DIR = ROOT / "traces"
@@ -62,7 +71,7 @@ def latest_manifest() -> Path:
         if kind == "capture":
             saw_capture = True
     if saw_capture:
-        raise FileNotFoundError(
+        raise CaptureOnlyWorkspaceError(
             "No eval runs yet. Found capture run(s); turn them into scenarios with "
             "`kensa generate`, then `kensa run`."
         )

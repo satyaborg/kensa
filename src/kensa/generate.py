@@ -229,6 +229,51 @@ def is_verbatim_replay_capture(run_id: str | None, trace_paths: list[Path] | Non
     return manifest.kind == RunKind.CAPTURE and manifest.captured_input is None
 
 
+def collect_noinput_commands(
+    run_id: str | None,
+    *,
+    trace_paths: list[Path] | None = None,
+) -> list[list[str]]:
+    """Return run_commands whose argv already bakes in the agent input.
+
+    A generated scenario that reuses one of these argvs must leave
+    ``scenario.input`` empty so the runner does not double-append. Only
+    no-``-i`` capture manifests qualify; ``-i`` captures and eval manifests
+    expect ``scenario.input`` to be appended on replay.
+
+    When the caller passes multiple traces spanning multiple manifests,
+    every matching no-``-i`` capture's command is included, so a mixed
+    generate still marks the right argvs for verbatim replay.
+    """
+    manifests: list[RunManifest] = []
+    if run_id:
+        try:
+            manifests = [RunManifest.model_validate_json(manifest_path(run_id).read_text())]
+        except (FileNotFoundError, ValueError):
+            return []
+    elif trace_paths:
+        manifests = _find_manifests_for_traces(trace_paths)
+    else:
+        try:
+            manifests = [
+                RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+            ]
+        except (FileNotFoundError, ValueError):
+            return []
+
+    out: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for m in manifests:
+        if m.kind != RunKind.CAPTURE or m.captured_input is not None or not m.command:
+            continue
+        key = tuple(m.command)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(list(m.command))
+    return out
+
+
 def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
     """Load every scenario in ``scenario_dir`` and return ``{scenario.id: run_command}``.
 
@@ -536,14 +581,21 @@ def generate_from_traces(
     model: str | None = None,
     *,
     run_commands: list[list[str]] | None = None,
+    noinput_commands: list[list[str]] | None = None,
     verbatim_replay: bool = False,
 ) -> list[Scenario]:
     """Read traces, ask an LLM for scenarios, return validated Scenario objects.
 
-    When ``verbatim_replay`` is true, the source run_command already has the
-    agent input baked into its argv (e.g. a capture without ``-i``). In that
-    case the runner must not append ``scenario.input`` on replay, so any
-    ``input`` the LLM emits is discarded before validation.
+    Replay semantics are carried per recovered command via
+    ``noinput_commands``: any generated scenario whose ``run_command`` matches
+    an entry in that list gets ``scenario.input = None`` so the runner does
+    not double-append on replay. Captures made without ``-i`` qualify;
+    ``-i`` captures, eval runs, and user-supplied ``--run-command`` overrides
+    do not.
+
+    ``verbatim_replay`` is a coarse fallback for callers that haven't built
+    the per-command list (e.g. simple tests). When true, every scenario gets
+    ``input = None`` regardless of argv.
     """
     from kensa.llm import get_completer
     from kensa.runner import read_trace
@@ -564,6 +616,9 @@ def generate_from_traces(
 
     single_run_command = run_commands[0] if run_commands and len(run_commands) == 1 else None
     allowlist = run_commands if run_commands and len(run_commands) > 1 else None
+    noinput_set: set[tuple[str, ...]] = (
+        {tuple(cmd) for cmd in noinput_commands} if noinput_commands else set()
+    )
 
     scenarios: list[Scenario] = []
     rejections: list[str] = []
@@ -575,7 +630,10 @@ def generate_from_traces(
         sd.setdefault("source", "traces")
         if single_run_command is not None:
             sd["run_command"] = list(single_run_command)
-        if verbatim_replay:
+        sc_cmd = sd.get("run_command")
+        if verbatim_replay or (
+            isinstance(sc_cmd, list) and tuple(sc_cmd) in noinput_set
+        ):
             sd["input"] = None
         try:
             candidate = Scenario.model_validate(sd)
