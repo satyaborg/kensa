@@ -631,9 +631,7 @@ def generate_from_traces(
         if single_run_command is not None:
             sd["run_command"] = list(single_run_command)
         sc_cmd = sd.get("run_command")
-        if verbatim_replay or (
-            isinstance(sc_cmd, list) and tuple(sc_cmd) in noinput_set
-        ):
+        if verbatim_replay or (isinstance(sc_cmd, list) and tuple(sc_cmd) in noinput_set):
             sd["input"] = None
         try:
             candidate = Scenario.model_validate(sd)

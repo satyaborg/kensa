@@ -771,9 +771,7 @@ class TestCollectRunCommands:
                 ["python", "agent.py"]
             ]
 
-    def test_multi_trace_from_different_captures_unions_run_commands(
-        self, tmp_path: Path
-    ) -> None:
+    def test_multi_trace_from_different_captures_unions_run_commands(self, tmp_path: Path) -> None:
         """--trace a.jsonl --trace b.jsonl from separate captures must surface both commands.
 
         Previously ``_find_manifest_for_traces`` returned only the newest

@@ -164,9 +164,7 @@ class TestCaptureCli:
             assert scenario["run_command"] == [sys.executable, str(FIXTURE_AGENT)]
             assert scenario["input"] == "refund this order please"
 
-    def test_bare_judge_in_capture_only_workspace_points_to_generate(
-        self, tmp_path: Path
-    ) -> None:
+    def test_bare_judge_in_capture_only_workspace_points_to_generate(self, tmp_path: Path) -> None:
         """kensa judge in a capture-only workspace hints `kensa generate`, not `kensa run`."""
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
