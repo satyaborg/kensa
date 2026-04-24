@@ -159,10 +159,10 @@ export function LandingPage() {
       <section className="a-hero">
         <div className="a-hero-inner">
           <div className="a-hero-copy">
-            {/* <Link href="/docs/cli#kensa-generate" className="a-badge">
+            <Link href="/docs/mcp-server" className="a-badge">
               <span className="a-badge-tag">NEW</span>
-              Generate evals from traces
-            </Link> */}
+              MCP server available
+            </Link>
             <h1 className="a-hero-title">Agent evals from zero to trusted.</h1>
             <p className="a-hook">
               Your coding agent drafts evals. You approve. Kensa instruments
