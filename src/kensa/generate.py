@@ -1,12 +1,4 @@
-"""Generate eval scenarios from existing traces via LLM.
-
-``kensa generate`` reads traces from a prior run, summarizes each trace into
-a compact representation, and asks an LLM to propose scenario YAMLs covering
-happy path, tool usage, edge cases, error handling, and cost/latency bounds.
-
-The port of ``skills/generate-scenarios`` into a first-class CLI so non-Claude-
-Code users can reproduce the ``kensa init && kensa generate && kensa run`` demo.
-"""
+"""Synthesize scenario YAMLs from captured traces via an LLM."""
 
 from __future__ import annotations
 
