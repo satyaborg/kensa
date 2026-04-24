@@ -8,6 +8,7 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ROOT_PYPROJECT = REPO_ROOT / "pyproject.toml"
 UV_LOCK = REPO_ROOT / "uv.lock"
+SHIM_PYPROJECT = REPO_ROOT / "packages" / "kensa-mcp" / "pyproject.toml"
 
 
 def _extract_pyproject_version(pyproject_path: Path) -> str:
@@ -31,7 +32,22 @@ def _extract_editable_lock_version(lock_path: Path, package_name: str) -> str:
     return match.group(1)
 
 
+def _extract_shim_kensa_pin(pyproject_path: Path) -> str:
+    text = pyproject_path.read_text()
+    match = re.search(r'"kensa\[mcp\]==([^"]+)"', text)
+    assert match is not None, f"Could not find kensa[mcp] pin in {pyproject_path}"
+    return match.group(1)
+
+
 def test_uv_lock_matches_root_package_version() -> None:
     assert _extract_editable_lock_version(UV_LOCK, "kensa") == _extract_pyproject_version(
         ROOT_PYPROJECT
     )
+
+
+def test_shim_pyproject_matches_root_version() -> None:
+    assert _extract_pyproject_version(SHIM_PYPROJECT) == _extract_pyproject_version(ROOT_PYPROJECT)
+
+
+def test_shim_dep_pin_matches_root_version() -> None:
+    assert _extract_shim_kensa_pin(SHIM_PYPROJECT) == _extract_pyproject_version(ROOT_PYPROJECT)
