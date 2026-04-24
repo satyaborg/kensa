@@ -49,7 +49,7 @@ _NUMERIC_CHECK_PARAMS: dict[CheckType, tuple[str, ...]] = {
 
 
 def _validate_generated_check_params(check: Check) -> None:
-    """Catch vacuous or wrong-typed params that model_validate allows (params is dict[str, Any])."""
+    """Reject wrong-typed numeric bounds and empty output_contains/matches values."""
     if check.type in _NUMERIC_CHECK_PARAMS:
         keys = _NUMERIC_CHECK_PARAMS[check.type]
         present = {k: check.params[k] for k in keys if k in check.params}
@@ -450,9 +450,6 @@ def generate_from_traces(
     if not scenario_dicts:
         raise ValueError("LLM returned zero scenarios")
 
-    # run_commands started as a prompt hint; now also enforce it as an allowlist.
-    # With exactly one observed command, rewrite silently (the LLM's hint was right
-    # conceptually but the payload drifted). With multiple, reject mismatches.
     single_run_command = run_commands[0] if run_commands and len(run_commands) == 1 else None
     allowlist = run_commands if run_commands and len(run_commands) > 1 else None
 

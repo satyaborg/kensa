@@ -654,11 +654,6 @@ def generate(
                 shlex.split(rc) for rc in run_command_overrides if rc.strip()
             ]
         else:
-            # Source and destination are separate: --scenario-dir writes here,
-            # --source-scenario-dir scans existing scenarios to recover run_command.
-            # When the user points --scenario-dir at a fresh output directory, we
-            # still want to look up the real entrypoint from the default scenarios
-            # directory unless they explicitly override it.
             if source_scenario_dir is not None:
                 source_dir = Path(source_scenario_dir)
             elif Path(scenario_dir).is_dir() and any(Path(scenario_dir).glob("*.y*ml")):
