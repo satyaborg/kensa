@@ -29,6 +29,16 @@ print(cfg['project']['version'])
 ")"
 [[ "$ACTUAL" == "$EXPECTED" ]] || die "pyproject.toml version ($ACTUAL) does not match tag ($EXPECTED). Was the release PR merged?"
 
+LOCK_VERSION="$(python3 -c "
+import pathlib, re, sys
+text = pathlib.Path('uv.lock').read_text()
+match = re.search(r'^\[\[package\]\]\nname = \"kensa\"\nversion = \"([^\"]+)\"\nsource = \{ editable = \".\" \}', text, flags=re.MULTILINE)
+if match is None:
+    raise SystemExit('missing editable kensa entry in uv.lock')
+sys.stdout.write(match.group(1))
+")"
+[[ "$LOCK_VERSION" == "$EXPECTED" ]] || die "uv.lock version ($LOCK_VERSION) does not match tag ($EXPECTED). Run uv lock and commit the result."
+
 # ── Check tag doesn't already exist ──────────────────────────────────
 if git rev-parse "$TAG" >/dev/null 2>&1; then
     die "tag $TAG already exists"

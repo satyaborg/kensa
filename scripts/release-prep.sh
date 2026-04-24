@@ -16,6 +16,7 @@ BUMP="${1:-}"
 # ── Prereqs ──────────────────────────────────────────────────────────
 command -v git-cliff >/dev/null 2>&1 || die "git-cliff not found. Install: cargo install git-cliff"
 command -v gh >/dev/null 2>&1 || die "gh CLI not found. Install: https://cli.github.com"
+command -v uv >/dev/null 2>&1 || die "uv not found. Install: https://docs.astral.sh/uv/"
 
 # ── Must be on main with a clean tree ────────────────────────────────
 BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -81,12 +82,26 @@ print(cfg['project']['version'])
 SHIM_PIN="$(grep -oE 'kensa\[mcp\]==[0-9][^"]*' packages/kensa-mcp/pyproject.toml | sed 's/.*==//')"
 [[ "$SHIM_PIN" == "$NEXT" ]] || die "shim dep pin update failed (got $SHIM_PIN)"
 
+# ── Refresh lockfile so editable package version stays in sync ──────
+info "refreshing uv.lock"
+uv lock || die "uv lock failed"
+
+LOCK_VERIFY="$(python3 -c "
+import pathlib, re, sys
+text = pathlib.Path('uv.lock').read_text()
+match = re.search(r'^\[\[package\]\]\nname = \"kensa\"\nversion = \"([^\"]+)\"\nsource = \{ editable = \".\" \}', text, flags=re.MULTILINE)
+if match is None:
+    raise SystemExit('missing editable kensa entry in uv.lock')
+sys.stdout.write(match.group(1))
+")"
+[[ "$LOCK_VERIFY" == "$NEXT" ]] || die "uv.lock update failed (got $LOCK_VERIFY)"
+
 # ── Generate changelog ───────────────────────────────────────────────
 info "generating changelog"
 git-cliff --tag "$TAG" -o CHANGELOG.md
 
 # ── Commit and open PR ───────────────────────────────────────────────
-git add pyproject.toml packages/kensa-mcp/pyproject.toml CHANGELOG.md
+git add pyproject.toml packages/kensa-mcp/pyproject.toml uv.lock CHANGELOG.md
 git commit -m "chore: release ${TAG}"
 git push -u origin "$RELEASE_BRANCH"
 
