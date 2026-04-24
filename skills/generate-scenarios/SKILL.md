@@ -42,6 +42,18 @@ kensa analyze --format json
 
 Use flagged traces to inform scenario design. Traces with errors, cost outliers, or repeated tool calls reveal real failure modes worth testing.
 
+### Fast path: `kensa generate`
+
+When traces exist, `kensa generate` proposes scenarios grounded in real inputs, observed tool names, and measured cost/turn bounds. Faster than handcrafting from scratch.
+
+```bash
+kensa generate -n 5 --dry-run     # print proposals, do not write
+kensa generate -n 5               # write proposals to .kensa/scenarios/
+kensa generate --run-command 'python .kensa/agents/app.py'  # when no manifest exists
+```
+
+Review the output before committing. The CLI enforces generator-strict rules (run_command must match observed entrypoints, every scenario needs max_cost or max_turns, no empty output_contains values, no dangling judge file references), but you still own scenario quality: merge duplicates, tighten criteria, drop scenarios that test the wrong thing.
+
 **If coming from `diagnose-errors`**, the diagnosis context (which scenarios failed, root causes, fix category) should guide what you write. Target the specific failure patterns identified, don't regenerate from scratch.
 
 ## Scenario categories
