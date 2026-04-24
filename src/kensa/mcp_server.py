@@ -49,6 +49,7 @@ ErrorCode = Literal[
     "scenario_not_found",
     "scenario_invalid",
     "run_not_found",
+    "run_not_evalable",
     "no_judge_key",
     "invalid_run_id",
     "path_escape",
@@ -404,6 +405,13 @@ async def judge(
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call run() first.")
 
+    if manifest.kind != RunKind.EVAL:
+        return MCPError(
+            error=f"Run {manifest.run_id!r} is a capture run, not an eval run.",
+            code="run_not_evalable",
+            hint="Call generate() to turn the capture into scenarios, then run().",
+        )
+
     try:
         provider = get_judge(model) if manifest_requires_judge(manifest, scenario_dir) else None
     except RuntimeError as e:
@@ -573,6 +581,17 @@ def report(
         if run_id is None:
             manifest = _load_manifest_or_latest(None)
             run_id = manifest.run_id
+        else:
+            try:
+                manifest = _load_manifest_or_latest(run_id)
+            except FileNotFoundError:
+                manifest = None
+            if manifest is not None and manifest.kind != RunKind.EVAL:
+                return MCPError(
+                    error=f"Run {manifest.run_id!r} is a capture run, not an eval run.",
+                    code="run_not_evalable",
+                    hint="Call generate() to turn the capture into scenarios, then run().",
+                )
         results = _load_results(run_id)
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call judge() or eval() first.")

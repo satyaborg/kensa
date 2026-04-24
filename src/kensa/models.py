@@ -421,6 +421,7 @@ class RunManifest(BaseModel):
     kind: RunKind = RunKind.EVAL
     scenarios: dict[str, list[ScenarioRun]] = Field(default_factory=dict)
     command: list[str] | None = None
+    captured_input: str | None = None
     trace_path: str | None = None
     exit_code: int | None = None
     duration_seconds: float | None = None
