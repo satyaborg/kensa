@@ -927,3 +927,59 @@ class TestCliGenerate:
             )
             assert result.exit_code == 0, result.output
             assert "LLM may hallucinate" in result.output
+
+    def test_scenario_dir_separated_from_source_dir(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """--scenario-dir=out must still pick up run_command from .kensa/scenarios."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            runs_dir.mkdir(parents=True)
+            traces_dir = Path(".kensa/traces")
+            traces_dir.mkdir(parents=True)
+            source_dir = Path(".kensa/scenarios")
+            source_dir.mkdir(parents=True)
+            out_dir = Path("out")
+
+            trace_path = traces_dir / "s1.jsonl"
+            _write_trace(trace_path, [_make_span()])
+
+            (source_dir / "seed.yaml").write_text(
+                "id: seed\nname: Seed\nrun_command: [python, agents/real.py]\n"
+            )
+            manifest = RunManifest(
+                run_id="20260423T120000",
+                timestamp=datetime(2026, 4, 23, 12, 0, tzinfo=timezone.utc),
+                scenarios={
+                    "seed": [
+                        ScenarioRun(
+                            trace_path=str(trace_path),
+                            exit_code=0,
+                            duration_seconds=1.0,
+                        )
+                    ]
+                },
+            )
+            (runs_dir / "20260423T120000.json").write_text(manifest.model_dump_json())
+
+            captured: dict[str, str] = {}
+
+            class Capture:
+                def complete(self, prompt: str, *, response_format: str | None = None) -> str:
+                    captured["prompt"] = prompt
+                    return json.dumps({"scenarios": [_valid_scenario_dict()]})
+
+            monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: Capture())
+
+            result = runner.invoke(
+                cli,
+                ["generate", "-n", "1", "--scenario-dir", str(out_dir)],
+            )
+            assert result.exit_code == 0, result.output
+            assert "entrypoints: 1" in result.output
+            assert "agents/real.py" in captured["prompt"]
+            assert (out_dir / "weather_happy.yaml").exists()
+            assert not list(source_dir.glob("weather_happy*")), (
+                "scenario written into source dir instead of --scenario-dir"
+            )

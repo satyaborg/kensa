@@ -606,6 +606,13 @@ Examples:
     help="Where to write generated scenarios.",
 )
 @click.option(
+    "--source-scenario-dir",
+    default=None,
+    help="Directory to scan for existing scenarios when recovering the observed "
+    "run_command (default: --scenario-dir if it already contains scenarios, else "
+    f"{SCENARIO_DIR}).",
+)
+@click.option(
     "--run-command",
     "run_command_overrides",
     multiple=True,
@@ -620,6 +627,7 @@ def generate(
     dry_run: bool,
     force: bool,
     scenario_dir: str,
+    source_scenario_dir: str | None,
     run_command_overrides: tuple[str, ...],
 ) -> None:
     """Generate eval scenarios from existing traces."""
@@ -646,10 +654,21 @@ def generate(
                 shlex.split(rc) for rc in run_command_overrides if rc.strip()
             ]
         else:
+            # Source and destination are separate: --scenario-dir writes here,
+            # --source-scenario-dir scans existing scenarios to recover run_command.
+            # When the user points --scenario-dir at a fresh output directory, we
+            # still want to look up the real entrypoint from the default scenarios
+            # directory unless they explicitly override it.
+            if source_scenario_dir is not None:
+                source_dir = Path(source_scenario_dir)
+            elif Path(scenario_dir).is_dir() and any(Path(scenario_dir).glob("*.y*ml")):
+                source_dir = Path(scenario_dir)
+            else:
+                source_dir = SCENARIO_DIR
             run_commands = (
                 collect_run_commands(
                     run_id,
-                    Path(scenario_dir),
+                    source_dir,
                     trace_paths=list(trace_paths) if traces else None,
                 )
                 or None

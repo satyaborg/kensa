@@ -52,6 +52,7 @@ kensa generate --run-command 'python .kensa/agents/app.py'  # override entrypoin
 | `--dry-run` | off | Print YAML to stdout; do not write files |
 | `--force` | off | Overwrite existing scenario files |
 | `--scenario-dir` | `.kensa/scenarios` | Where to write generated scenarios |
+| `--source-scenario-dir` | auto | Where to scan for existing scenarios when recovering the observed `run_command`. Defaults to `--scenario-dir` if it already has scenarios, otherwise `.kensa/scenarios`. |
 | `--run-command` | inferred | Entrypoint argv to hint to the LLM (repeatable) |
 
 Source priority: `--trace` → `--run-id` → latest run manifest. When the manifest references exactly one `run_command`, generated scenarios are rewritten to use it verbatim; with multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
