@@ -129,6 +129,26 @@ def _write_manifest(
     return path
 
 
+def _write_capture_manifest(run_id: str) -> Path:
+    from kensa.models import RunKind
+
+    run_dir = Path(".kensa/runs")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest = RunManifest(
+        run_id=run_id,
+        timestamp=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        kind=RunKind.CAPTURE,
+        command=["python", "agent.py"],
+        trace_path=".kensa/traces/cap.jsonl",
+        exit_code=0,
+        duration_seconds=0.5,
+        span_count=1,
+    )
+    path = run_dir / f"{run_id}.json"
+    path.write_text(manifest.model_dump_json())
+    return path
+
+
 class TestSurface:
     def test_seven_tools(self) -> None:
         tools = asyncio.run(mcp.list_tools())
@@ -332,6 +352,14 @@ class TestJudge:
         assert out.run_id == "20260301T000000"
         assert out.results_uri == "kensa://runs/20260301T000000/results"
 
+    def test_capture_run_returns_run_not_evalable(self, tmp_path: Path) -> None:
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000010")
+            out = asyncio.run(judge(run_id="20260301T000010"))
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_evalable"
+        assert not Path(".kensa/results/20260301T000010.json").exists()
+
     def test_malformed_yaml_returns_scenario_invalid(self, tmp_path: Path) -> None:
         """A malformed scenario YAML referenced by the manifest must surface as
         a typed MCPError(scenario_invalid), not bubble out as a generic error."""
@@ -450,6 +478,13 @@ class TestReport:
             out = report(run_id="nonexistent")
         assert isinstance(out, MCPError)
         assert out.code == "run_not_found"
+
+    def test_capture_run_returns_run_not_evalable(self, tmp_path: Path) -> None:
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000020")
+            out = report(run_id="20260301T000020")
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_evalable"
 
     def test_renders(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):

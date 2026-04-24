@@ -162,3 +162,27 @@ class TestCaptureCli:
             assert result.exit_code == 0
             scenario = yaml.safe_load(Path(".kensa/scenarios/captured_happy.yaml").read_text())
             assert scenario["run_command"] == [sys.executable, str(FIXTURE_AGENT)]
+            assert scenario["input"] == "refund this order please"
+
+    def test_generate_from_no_i_capture_emits_empty_scenario_input(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Verbatim-replay captures must not double-append via scenario.input."""
+        runner = CliRunner()
+        captured_argv = [sys.executable, str(FIXTURE_AGENT), "refund this order please"]
+        payload = json.dumps({"scenarios": [_generated_scenario(captured_argv)]})
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: _FakeCompleter(payload))
+
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            capture = runner.invoke(
+                cli,
+                ["capture", "--", *captured_argv],
+            )
+            assert capture.exit_code == 0
+
+            result = runner.invoke(cli, ["generate"])
+
+            assert result.exit_code == 0
+            scenario = yaml.safe_load(Path(".kensa/scenarios/captured_happy.yaml").read_text())
+            assert scenario["run_command"] == captured_argv
+            assert "input" not in scenario or scenario["input"] in (None, "")

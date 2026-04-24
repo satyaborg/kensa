@@ -41,13 +41,17 @@ def latest_report_link() -> Path:
 def latest_manifest() -> Path:
     """Return the path to the most recent run manifest.
 
-    Raises FileNotFoundError if no manifests exist.
+    Raises FileNotFoundError if no eval manifests exist. If only capture
+    manifests are present, the error points the user at ``kensa generate``
+    rather than ``kensa run`` so capture-first workspaces aren't silently
+    told to start over.
     """
     if not RUN_DIR.exists():
         raise FileNotFoundError("No runs found. Run `kensa run` first.")
     manifests = sorted(RUN_DIR.glob("*.json"), reverse=True)
     if not manifests:
         raise FileNotFoundError("No run manifests found. Run `kensa run` first.")
+    saw_capture = False
     for path in manifests:
         try:
             kind = json.loads(path.read_text()).get("kind", "eval")
@@ -55,6 +59,13 @@ def latest_manifest() -> Path:
             continue
         if kind == "eval":
             return path
+        if kind == "capture":
+            saw_capture = True
+    if saw_capture:
+        raise FileNotFoundError(
+            "No eval runs yet. Found capture run(s); turn them into scenarios with "
+            "`kensa generate`, then `kensa run`."
+        )
     raise FileNotFoundError("No run manifests found. Run `kensa run` first.")
 
 

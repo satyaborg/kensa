@@ -709,6 +709,7 @@ def generate(
     from kensa.generate import (
         collect_run_commands,
         generate_from_traces,
+        is_verbatim_replay_capture,
         resolve_trace_paths,
         write_scenarios,
     )
@@ -747,6 +748,12 @@ def generate(
         else:
             s.item("entrypoints: (none found; LLM may hallucinate — pass --run-command)", ok=False)
 
+        verbatim = is_verbatim_replay_capture(
+            run_id, list(trace_paths) if traces else None
+        )
+        if verbatim:
+            s.item("replay mode: verbatim (capture had no -i; scenario.input will be empty)")
+
         import warnings
 
         with (
@@ -759,6 +766,7 @@ def generate(
                 count=count,
                 model=model,
                 run_commands=run_commands,
+                verbatim_replay=verbatim,
             )
         for w in caught:
             s.item(str(w.message), ok=False)

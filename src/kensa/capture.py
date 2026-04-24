@@ -132,6 +132,7 @@ def capture_command(command: list[str], captured_input: str | None = None) -> Ru
         timestamp=timestamp,
         kind=RunKind.CAPTURE,
         command=list(command),
+        captured_input=captured_input,
         trace_path=trace_path,
         exit_code=exit_code,
         duration_seconds=round(duration, 2),

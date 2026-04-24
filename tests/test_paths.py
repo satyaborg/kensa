@@ -103,3 +103,13 @@ class TestLatestManifest:
         (runs / "20260327T120001.json").write_text('{"kind":"capture"}')
         (runs / "20260327T120002.json").write_text('{"kind":"capture"}')
         assert latest_capture_manifest().name == "20260327T120002.json"
+
+    def test_latest_manifest_points_to_generate_when_only_captures_exist(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runs = tmp_path / ".kensa" / "runs"
+        runs.mkdir(parents=True)
+        (runs / "20260327T120000.json").write_text('{"kind":"capture"}')
+        with pytest.raises(FileNotFoundError, match="kensa generate"):
+            latest_manifest()

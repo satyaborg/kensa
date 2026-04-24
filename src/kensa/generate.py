@@ -207,6 +207,28 @@ def _resolve_generate_manifest(run_id: str | None) -> Path:
         return latest_manifest()
 
 
+def is_verbatim_replay_capture(run_id: str | None, trace_paths: list[Path] | None) -> bool:
+    """Return True iff the resolved source manifest is a capture with no explicit ``-i`` input.
+
+    Such captures have the prompt baked into ``manifest.command`` argv, so
+    generated scenarios must leave ``scenario.input`` empty to avoid a
+    double-append on replay.
+    """
+    manifest: RunManifest | None = None
+    try:
+        if run_id:
+            manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
+        elif trace_paths:
+            manifest = _find_manifest_for_traces(trace_paths)
+        else:
+            manifest = RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+    except (FileNotFoundError, ValueError):
+        return False
+    if manifest is None:
+        return False
+    return manifest.kind == RunKind.CAPTURE and manifest.captured_input is None
+
+
 def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
     """Load every scenario in ``scenario_dir`` and return ``{scenario.id: run_command}``.
 
@@ -468,8 +490,15 @@ def generate_from_traces(
     model: str | None = None,
     *,
     run_commands: list[list[str]] | None = None,
+    verbatim_replay: bool = False,
 ) -> list[Scenario]:
-    """Read traces, ask an LLM for scenarios, return validated Scenario objects."""
+    """Read traces, ask an LLM for scenarios, return validated Scenario objects.
+
+    When ``verbatim_replay`` is true, the source run_command already has the
+    agent input baked into its argv (e.g. a capture without ``-i``). In that
+    case the runner must not append ``scenario.input`` on replay, so any
+    ``input`` the LLM emits is discarded before validation.
+    """
     from kensa.llm import get_completer
     from kensa.runner import read_trace
 
@@ -500,6 +529,8 @@ def generate_from_traces(
         sd.setdefault("source", "traces")
         if single_run_command is not None:
             sd["run_command"] = list(single_run_command)
+        if verbatim_replay:
+            sd["input"] = None
         try:
             candidate = Scenario.model_validate(sd)
             _validate_scenario_id(candidate.id)
