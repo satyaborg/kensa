@@ -541,6 +541,26 @@ class TestRunsResource:
         assert len(out) == 1
         assert out[0].run_id == "r1"
 
+    def test_captures_filtered_before_cap(self, tmp_path: Path) -> None:
+        """Capture manifests must not consume the 50-eval budget.
+
+        Newest 60 files are captures, older 3 are evals. Pre-fix, all 50
+        returned entries would be squeezed out by captures. Post-fix, the
+        older evals still surface.
+        """
+        with _isolated(tmp_path):
+            for i in range(60):
+                _write_capture_manifest(f"c{i:03d}")
+            # Evals with older-sorting ids ("a*") must still surface.
+            _write_manifest("a_old_1")
+            _write_manifest("a_old_2")
+            _write_manifest("a_old_3")
+
+            out = runs_list()
+
+        ids = {r.run_id for r in out}
+        assert ids == {"a_old_1", "a_old_2", "a_old_3"}
+
 
 class TestRunDetailResource:
     def test_invalid_id(self) -> None:

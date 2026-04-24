@@ -871,6 +871,22 @@ def generate(
                 "scenario.input (captured without -i)"
             )
 
+        if (
+            count > 1
+            and run_commands
+            and len(run_commands) == 1
+            and noinput_commands
+            and run_commands[0] in noinput_commands
+        ):
+            raise click.UsageError(
+                "All generated scenarios would replay the same baked-in prompt: "
+                "the capture has no -i marker and only one observed argv, so "
+                "scenario.input will be forced empty for every candidate.\n"
+                'Fix: re-capture with `kensa capture -i "<input>" -- <cmd>` so '
+                'scenarios can vary the prompt, or pass `--run-command "<clean argv>"` '
+                "to normalize the skeleton, or request only -n 1."
+            )
+
         import warnings
 
         with (

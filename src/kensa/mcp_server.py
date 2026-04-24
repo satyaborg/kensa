@@ -636,12 +636,18 @@ def analyze(trace_dir: str = str(TRACE_DIR)) -> Analysis:
 
 @mcp.resource("kensa://runs")
 def runs_list() -> list[RunListItem]:
-    """List the most recent runs (newest first, up to 50)."""
+    """List the most recent eval runs (newest first, up to 50).
+
+    Capture manifests are filtered out *before* the 50-item cap so a
+    workspace full of recent captures does not push eval history off the
+    window.
+    """
     if not RUN_DIR.exists():
         return []
-    paths = sorted(RUN_DIR.glob("*.json"), reverse=True)[:50]
     out: list[RunListItem] = []
-    for p in paths:
+    for p in sorted(RUN_DIR.glob("*.json"), reverse=True):
+        if len(out) >= 50:
+            break
         try:
             manifest = RunManifest.model_validate_json(p.read_text())
         except (OSError, ValueError):
