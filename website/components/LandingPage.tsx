@@ -158,7 +158,7 @@ export function LandingPage() {
       <section className="a-hero">
         <div className="a-hero-inner">
           <div className="a-hero-copy">
-            <Link href="/docs/mcp" className="a-badge">
+            <Link href="/docs/mcp-server" className="a-badge">
               <span className="a-badge-tag">NEW</span>
               MCP server available
             </Link>

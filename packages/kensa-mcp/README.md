@@ -14,7 +14,7 @@ Or register it with Claude Code in one line:
 claude mcp add kensa -- uvx kensa-mcp
 ```
 
-The server exposes kensa's eval workflow (`init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`) as MCP tools, and run artefacts as resources under `kensa://`. See the [MCP server docs](https://kensa.sh/docs/mcp) for the full reference.
+The server exposes kensa's eval workflow (`init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`) as MCP tools, and run artefacts as resources under `kensa://`. See the [MCP server docs](https://kensa.sh/docs/mcp-server) for the full reference.
 
 ## Relationship to kensa
 
