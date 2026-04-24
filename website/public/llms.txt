@@ -54,6 +54,7 @@ Deterministic check types — fast, cheap, binary. Run before the LLM judge to s
 - `tools_called`: All listed tools were invoked (set membership, order-free)
 - `tools_not_called`: None of the listed tools were invoked
 - `tool_order`: Tools called in this temporal sequence (use only when order is load-bearing)
+- `trajectory`: Validate tool-call sequences against expected patterns (strict or any-order) with optional accuracy thresholds
 - `max_cost`: Total cost under threshold
 - `max_turns`: LLM call count under limit
 - `max_duration`: Execution time under limit
@@ -103,6 +104,7 @@ Works standalone without a coding agent. Python 3.10+.
 - `kensa eval`: run + judge + report in one shot
 - `kensa eval -s <name>`: eval specific scenario
 - `kensa init`: Set up .kensa/ dir with example agent
+- `kensa generate`: Synthesize scenario YAMLs from captured traces via an LLM
 - `kensa run`: Run scenarios and capture traces
 - `kensa judge`: Score the latest run with checks + LLM judge
 - `kensa judge --model <model>`: Override judge model
@@ -112,6 +114,7 @@ Works standalone without a coding agent. Python 3.10+.
 - `kensa report --format html`: Standalone HTML file
 - `kensa analyze`: Surface cost, latency, and anomalies across runs
 - `kensa doctor`: Verify your setup is ready to run
+- `kensa mcp`: Serve kensa over MCP (stdio by default, `--http --port` for HTTP)
 
 ## CI
 
@@ -122,6 +125,12 @@ Works standalone without a coding agent. Python 3.10+.
 ```
 
 Deterministic checks need no API keys. Add judge keys as secrets for LLM-judged criteria; if omitted, judge criteria are skipped and don't block the pipeline.
+
+## MCP server
+
+Kensa ships as an MCP server so any MCP-aware client (Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop) can drive the full eval workflow. `init`, `doctor`, `run`, `judge`, `eval`, `report`, and `analyze` are exposed as tools; runs, scenarios, and judges are readable as resources under `kensa://`.
+
+One-liner for Claude Code: `claude mcp add kensa -- uvx kensa-mcp`. The `kensa-mcp` PyPI shim pins to the matching `kensa[mcp]` version, so no pre-install is needed.
 
 ## OTel compatibility
 

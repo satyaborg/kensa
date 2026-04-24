@@ -97,6 +97,7 @@ const skills = [
 
 const cliCommands = [
   { cmd: "kensa init", desc: "Scaffold with an example agent" },
+  { cmd: "kensa generate", desc: "Synthesize scenarios from captured traces" },
   { cmd: "kensa eval", desc: "run + judge + report in one shot" },
   { cmd: "kensa run", desc: "Execute scenarios, capture traces" },
   { cmd: "kensa judge", desc: "Deterministic checks + LLM judge" },
@@ -158,10 +159,10 @@ export function LandingPage() {
       <section className="a-hero">
         <div className="a-hero-inner">
           <div className="a-hero-copy">
-            <Link href="/docs/mcp-server" className="a-badge">
+            {/* <Link href="/docs/cli#kensa-generate" className="a-badge">
               <span className="a-badge-tag">NEW</span>
-              MCP server available
-            </Link>
+              Generate evals from traces
+            </Link> */}
             <h1 className="a-hero-title">Agent evals from zero to trusted.</h1>
             <p className="a-hook">
               Your coding agent drafts evals. You approve. Kensa instruments
@@ -212,8 +213,11 @@ export function LandingPage() {
           </div>
 
           <p className="a-features-outro">
-            Each run leaves traces your coding agent can turn into sharper
-            scenarios.
+            Each run leaves traces that kensa can{" "}
+            <Link href="/docs/cli#kensa-generate">
+              turn into sharper scenarios
+            </Link>
+            .
           </p>
         </section>
 
