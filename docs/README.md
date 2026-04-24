@@ -40,7 +40,7 @@ docs/
   tracing.mdx
   skills.mdx
   cli.mdx
-  mcp.mdx
+  mcp-server.mdx
   ci.mdx
   examples.mdx
   changelog.mdx

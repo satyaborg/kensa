@@ -63,7 +63,7 @@
         "pages": [
           "skills",
           "cli",
-          "mcp",
+          "mcp-server",
           "ci"
         ]
       },
