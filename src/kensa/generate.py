@@ -9,8 +9,8 @@ from typing import Any, cast
 
 import yaml
 
-from kensa.models import Check, CheckType, RunManifest, Scenario, Span
-from kensa.paths import SCENARIO_DIR, latest_manifest, manifest_path
+from kensa.models import Check, CheckType, RunKind, RunManifest, Scenario, Span
+from kensa.paths import SCENARIO_DIR, latest_capture_manifest, latest_manifest, manifest_path
 
 MAX_TRACES_IN_PROMPT = 10
 MAX_OUTPUT_CHARS = 500
@@ -173,8 +173,16 @@ def resolve_trace_paths(
     if traces:
         return [Path(t) for t in traces]
 
-    manifest_file = manifest_path(run_id) if run_id else latest_manifest()
+    manifest_file = _resolve_generate_manifest(run_id)
     manifest = RunManifest.model_validate_json(manifest_file.read_text())
+
+    if manifest.kind == RunKind.CAPTURE:
+        if not manifest.trace_path:
+            raise FileNotFoundError(
+                f"Capture {manifest.run_id} has no trace file. Re-run `kensa capture` with an "
+                "instrumented SDK or call `kensa.instrument()`."
+            )
+        return [Path(manifest.trace_path)]
 
     paths: list[Path] = [
         Path(sr.trace_path) for runs in manifest.scenarios.values() for sr in runs if sr.trace_path
@@ -184,6 +192,19 @@ def resolve_trace_paths(
             f"Manifest {manifest.run_id} has no trace files. Run `kensa run` first."
         )
     return paths
+
+
+def _resolve_generate_manifest(run_id: str | None) -> Path:
+    """Resolve the manifest source for ``kensa generate``.
+
+    Prefers an explicit run ID, then the latest capture, then the latest eval run.
+    """
+    if run_id:
+        return manifest_path(run_id)
+    try:
+        return latest_capture_manifest()
+    except FileNotFoundError:
+        return latest_manifest()
 
 
 def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
@@ -212,9 +233,11 @@ def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
 def _manifest_scenario_ids(run_id: str | None) -> set[str]:
     """Return the set of scenario ids recorded in a manifest. Empty on failure."""
     try:
-        manifest_file = manifest_path(run_id) if run_id else latest_manifest()
+        manifest_file = _resolve_generate_manifest(run_id)
         manifest = RunManifest.model_validate_json(manifest_file.read_text())
     except (FileNotFoundError, ValueError):
+        return set()
+    if manifest.kind != RunKind.EVAL:
         return set()
     return set(manifest.scenarios.keys())
 
@@ -231,6 +254,14 @@ def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
             manifest = RunManifest.model_validate_json(manifest_file.read_text())
         except (ValueError, OSError):
             continue
+        if manifest.kind == RunKind.CAPTURE:
+            if not manifest.trace_path:
+                continue
+            try:
+                if Path(manifest.trace_path).resolve() in wanted:
+                    return manifest
+            except OSError:
+                continue
         for runs in manifest.scenarios.values():
             for sr in runs:
                 if not sr.trace_path:
@@ -260,11 +291,25 @@ def collect_run_commands(
     manifest that references any of those traces.
     Returns ``[]`` when nothing can be resolved.
     """
-    ids: set[str] = _manifest_scenario_ids(run_id)
-    if not ids and trace_paths:
+    manifest: RunManifest | None = None
+    if run_id:
+        try:
+            manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
+        except (FileNotFoundError, ValueError):
+            return []
+    elif trace_paths:
         manifest = _find_manifest_for_traces(trace_paths)
-        if manifest:
-            ids = set(manifest.scenarios.keys())
+    else:
+        try:
+            manifest = RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+        except (FileNotFoundError, ValueError):
+            return []
+    if manifest is None:
+        return []
+    if manifest.kind == RunKind.CAPTURE:
+        return [list(manifest.command)] if manifest.command else []
+
+    ids = set(manifest.scenarios.keys())
     if not ids:
         return []
 

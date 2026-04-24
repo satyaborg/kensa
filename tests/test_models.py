@@ -18,6 +18,7 @@ from kensa.models import (
     JudgePromptSpec,
     Result,
     ResultStatus,
+    RunKind,
     RunManifest,
     Scenario,
     ScenarioRun,
@@ -448,6 +449,36 @@ class TestRunManifest:
         }
         manifest = RunManifest.model_validate(data)
         assert len(manifest.scenarios["test_1"]) == 2
+
+    def test_missing_kind_defaults_to_eval(self) -> None:
+        manifest = RunManifest.model_validate(
+            {
+                "run_id": "20260317T143000",
+                "timestamp": "2026-03-17T14:30:00+00:00",
+                "scenarios": {},
+            }
+        )
+        assert manifest.kind == RunKind.EVAL
+
+    def test_capture_manifest_round_trip(self) -> None:
+        manifest = RunManifest(
+            run_id="20260317T143001",
+            timestamp=datetime(2026, 3, 17, 14, 30, 1, tzinfo=timezone.utc),
+            kind=RunKind.CAPTURE,
+            command=["python", "agent.py", "hello"],
+            trace_path=".kensa/traces/20260317T143001.jsonl",
+            exit_code=0,
+            duration_seconds=1.5,
+            stdout="ok",
+            stderr="",
+            span_count=3,
+        )
+
+        restored = RunManifest.model_validate_json(manifest.model_dump_json())
+        assert restored.kind == RunKind.CAPTURE
+        assert restored.command == ["python", "agent.py", "hello"]
+        assert restored.trace_path == ".kensa/traces/20260317T143001.jsonl"
+        assert restored.span_count == 3
 
 
 class TestScenarioJudgeValidation:

@@ -175,11 +175,13 @@ class TestHelpers:
 
 
 class TestInit:
-    def test_blank_creates_dirs_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_creates_dirs_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with _isolated(tmp_path):
-            out = init(blank=True)
+            out = init()
             assert Path(".kensa/scenarios").is_dir()
             assert not Path(".kensa/scenarios/example.yaml").exists()
         assert not isinstance(out, MCPError)
@@ -194,7 +196,7 @@ class TestInit:
             out = init()
         assert not isinstance(out, MCPError)
         assert out.directories_created == []
-        assert out.example_already_existed is True
+        assert out.example_already_existed is False
 
 
 class TestDoctor:

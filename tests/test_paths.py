@@ -14,6 +14,7 @@ from kensa.paths import (
     SCENARIO_DIR,
     TRACE_DIR,
     judge_prompt_path,
+    latest_capture_manifest,
     latest_manifest,
     latest_report_link,
     manifest_path,
@@ -78,6 +79,27 @@ class TestLatestManifest:
         monkeypatch.chdir(tmp_path)
         runs = tmp_path / ".kensa" / "runs"
         runs.mkdir(parents=True)
-        (runs / "20260101T000000.json").write_text("{}")
-        (runs / "20260327T120000.json").write_text("{}")
+        (runs / "20260101T000000.json").write_text('{"kind":"eval"}')
+        (runs / "20260327T120000.json").write_text('{"kind":"eval"}')
         assert latest_manifest().name == "20260327T120000.json"
+
+    def test_latest_manifest_skips_capture_runs(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runs = tmp_path / ".kensa" / "runs"
+        runs.mkdir(parents=True)
+        (runs / "20260327T120000.json").write_text('{"kind":"eval"}')
+        (runs / "20260327T120001.json").write_text('{"kind":"capture"}')
+        assert latest_manifest().name == "20260327T120000.json"
+
+    def test_latest_capture_manifest_returns_newest_capture(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.chdir(tmp_path)
+        runs = tmp_path / ".kensa" / "runs"
+        runs.mkdir(parents=True)
+        (runs / "20260327T120000.json").write_text('{"kind":"eval"}')
+        (runs / "20260327T120001.json").write_text('{"kind":"capture"}')
+        (runs / "20260327T120002.json").write_text('{"kind":"capture"}')
+        assert latest_capture_manifest().name == "20260327T120002.json"
