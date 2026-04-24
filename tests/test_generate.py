@@ -770,6 +770,59 @@ class TestCollectRunCommands:
                 ["python", "agent.py"]
             ]
 
+    def test_multi_trace_from_different_captures_unions_run_commands(
+        self, tmp_path: Path
+    ) -> None:
+        """--trace a.jsonl --trace b.jsonl from separate captures must surface both commands.
+
+        Previously ``_find_manifest_for_traces`` returned only the newest
+        matching manifest, so a mixed-trace generate silently forced one
+        capture's argv onto every scenario.
+        """
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            traces_dir = Path(".kensa/traces")
+            runs_dir.mkdir(parents=True)
+            traces_dir.mkdir(parents=True)
+
+            trace_a = traces_dir / "a.jsonl"
+            trace_b = traces_dir / "b.jsonl"
+            trace_a.write_text("")
+            trace_b.write_text("")
+
+            (runs_dir / "r_a.json").write_text(
+                RunManifest(
+                    run_id="r_a",
+                    timestamp=datetime(2026, 4, 22, 12, 0, tzinfo=timezone.utc),
+                    kind=RunKind.CAPTURE,
+                    command=["python", "a.py"],
+                    trace_path=str(trace_a),
+                    exit_code=0,
+                    duration_seconds=1.0,
+                    span_count=1,
+                ).model_dump_json()
+            )
+            (runs_dir / "r_b.json").write_text(
+                RunManifest(
+                    run_id="r_b",
+                    timestamp=datetime(2026, 4, 22, 12, 0, 1, tzinfo=timezone.utc),
+                    kind=RunKind.CAPTURE,
+                    command=["python", "b.py"],
+                    trace_path=str(trace_b),
+                    exit_code=0,
+                    duration_seconds=1.0,
+                    span_count=1,
+                ).model_dump_json()
+            )
+
+            commands = collect_run_commands(
+                run_id=None,
+                scenario_dir=Path(".kensa/scenarios"),
+                trace_paths=[trace_a, trace_b],
+            )
+            assert sorted(commands) == [["python", "a.py"], ["python", "b.py"]]
+
 
 class TestValidateScenarioId:
     def test_accepts_snake_case(self) -> None:

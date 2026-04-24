@@ -264,13 +264,20 @@ def _manifest_scenario_ids(run_id: str | None) -> set[str]:
     return set(manifest.scenarios.keys())
 
 
-def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
-    """Find the most recent manifest whose ScenarioRuns reference any of ``trace_paths``."""
+def _find_manifests_for_traces(trace_paths: list[Path]) -> list[RunManifest]:
+    """Return every manifest that references at least one of ``trace_paths``.
+
+    Walks ``.kensa/runs/`` newest-first. A manifest matches if any of its
+    ScenarioRuns (eval) or its ``trace_path`` (capture) resolves to a path
+    the caller asked about. Passing traces from different runs therefore
+    surfaces every source manifest rather than silently locking onto one.
+    """
     from kensa.paths import RUN_DIR
 
     if not RUN_DIR.is_dir():
-        return None
+        return []
     wanted = {p.resolve() for p in trace_paths}
+    matches: list[RunManifest] = []
     for manifest_file in sorted(RUN_DIR.glob("*.json"), reverse=True):
         try:
             manifest = RunManifest.model_validate_json(manifest_file.read_text())
@@ -281,19 +288,38 @@ def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
                 continue
             try:
                 if Path(manifest.trace_path).resolve() in wanted:
-                    return manifest
+                    matches.append(manifest)
             except OSError:
                 continue
+            continue
         for runs in manifest.scenarios.values():
+            matched = False
             for sr in runs:
                 if not sr.trace_path:
                     continue
                 try:
                     if Path(sr.trace_path).resolve() in wanted:
-                        return manifest
+                        matches.append(manifest)
+                        matched = True
+                        break
                 except OSError:
                     continue
-    return None
+            if matched:
+                break
+    return matches
+
+
+def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
+    """Back-compat helper: return a unique matching manifest, else ``None``.
+
+    Used where only a single source manifest makes sense (e.g. the
+    verbatim-replay signal). Returns ``None`` when zero or multiple
+    distinct manifests match.
+    """
+    matches = _find_manifests_for_traces(trace_paths)
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def collect_run_commands(
@@ -313,31 +339,51 @@ def collect_run_commands(
     manifest that references any of those traces.
     Returns ``[]`` when nothing can be resolved.
     """
-    manifest: RunManifest | None = None
+    manifests: list[RunManifest] = []
     if run_id:
         try:
-            manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
+            manifests = [RunManifest.model_validate_json(manifest_path(run_id).read_text())]
         except (FileNotFoundError, ValueError):
             return []
     elif trace_paths:
-        manifest = _find_manifest_for_traces(trace_paths)
+        manifests = _find_manifests_for_traces(trace_paths)
     else:
         try:
-            manifest = RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+            manifests = [
+                RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+            ]
         except (FileNotFoundError, ValueError):
             return []
-    if manifest is None:
-        return []
-    if manifest.kind == RunKind.CAPTURE:
-        return [list(manifest.command)] if manifest.command else []
-
-    ids = set(manifest.scenarios.keys())
-    if not ids:
+    if not manifests:
         return []
 
-    id_map = _id_to_run_command(scenario_dir)
     unique: list[list[str]] = []
     seen: set[tuple[str, ...]] = set()
+
+    def _add(cmd: list[str]) -> None:
+        key = tuple(cmd)
+        if key not in seen:
+            seen.add(key)
+            unique.append(cmd)
+
+    eval_manifests: list[RunManifest] = []
+    for m in manifests:
+        if m.kind == RunKind.CAPTURE:
+            if m.command:
+                _add(list(m.command))
+        else:
+            eval_manifests.append(m)
+
+    if not eval_manifests:
+        return unique
+
+    ids: set[str] = set()
+    for m in eval_manifests:
+        ids.update(m.scenarios.keys())
+    if not ids:
+        return unique
+
+    id_map = _id_to_run_command(scenario_dir)
     for sid in ids:
         cmd = id_map.get(sid)
         if cmd is None:
