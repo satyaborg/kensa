@@ -1041,7 +1041,7 @@ class TestCliAnalyze:
 
 
 class TestCliInit:
-    def test_init_creates_directories_and_example(self, tmp_path: Path) -> None:
+    def test_init_creates_directories_without_example_by_default(self, tmp_path: Path) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["init"])
@@ -1050,28 +1050,28 @@ class TestCliInit:
             assert Path(".kensa/traces").is_dir()
             assert Path(".kensa/judges").is_dir()
             assert Path(".kensa/agents").is_dir()
-            assert Path(".kensa/agents/example.py").is_file()
-            assert Path(".kensa/scenarios/example.yaml").is_file()
+            assert not Path(".kensa/agents/example.py").exists()
+            assert not Path(".kensa/scenarios/example.yaml").exists()
             assert "created" in result.output
 
     def test_init_example_is_valid_yaml(self, tmp_path: Path) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["init"])
+            runner.invoke(cli, ["init", "--example"])
             content = yaml.safe_load(Path(".kensa/scenarios/example.yaml").read_text())
             assert content["id"] == "example"
             assert content["run_command"]
             assert len(content["checks"]) >= 1
 
-    def test_init_idempotent_no_overwrite(self, tmp_path: Path) -> None:
+    def test_init_example_idempotent_no_overwrite(self, tmp_path: Path) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["init"])
+            runner.invoke(cli, ["init", "--example"])
             # Modify the example
             example = Path(".kensa/scenarios/example.yaml")
             example.write_text("id: custom\nname: Custom\n")
 
-            result = runner.invoke(cli, ["init"])
+            result = runner.invoke(cli, ["init", "--example"])
             assert result.exit_code == 0
             assert "scenario ready" in result.output
             # Content should be untouched
@@ -1080,33 +1080,49 @@ class TestCliInit:
     def test_init_force_overwrites(self, tmp_path: Path) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            runner.invoke(cli, ["init"])
+            runner.invoke(cli, ["init", "--example"])
             example = Path(".kensa/scenarios/example.yaml")
             example.write_text("id: custom\nname: Custom\n")
 
-            result = runner.invoke(cli, ["init", "--force"])
+            result = runner.invoke(cli, ["init", "--example", "--force"])
             assert result.exit_code == 0
             content = yaml.safe_load(example.read_text())
             assert content["id"] == "example"
 
-    def test_init_scaffolds_agent_without_instrument_boilerplate(self, tmp_path: Path) -> None:
-        """Scaffolded agent has no `instrument()` boilerplate — the wrapper handles it."""
+    def test_init_scaffold_only_by_default(self, tmp_path: Path) -> None:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["init"])
+            assert result.exit_code == 0
+            assert Path(".kensa/scenarios").is_dir()
+            assert Path(".kensa/traces").is_dir()
+            assert Path(".kensa/judges").is_dir()
+            assert Path(".kensa/agents").is_dir()
+            assert not Path(".kensa/agents/example.py").exists()
+            assert not Path(".kensa/scenarios/example.yaml").exists()
+            assert not Path(".kensa/scenarios/example.jsonl").exists()
+            assert "kensa capture -- <your-agent-command>" in result.output
+
+    def test_init_example_scaffolds_agent_without_instrument_boilerplate(
+        self, tmp_path: Path
+    ) -> None:
+        """Scaffolded example has no `instrument()` boilerplate — the wrapper handles it."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["init", "--example"])
             assert result.exit_code == 0
             agent = Path(".kensa/agents/example.py").read_text()
             assert "from kensa import instrument" not in agent
             assert "instrument()" not in agent
 
-    def test_init_scaffolds_stub_without_api_keys(
+    def test_init_example_scaffolds_stub_without_api_keys(
         self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
     ) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
-            result = runner.invoke(cli, ["init"])
+            result = runner.invoke(cli, ["init", "--example"])
             assert result.exit_code == 0
             agent = Path(".kensa/agents/example.py").read_text()
             assert "from kensa import instrument" not in agent
@@ -1125,7 +1141,7 @@ class TestCliInit:
             assert not Path(".kensa/agents/example.py").exists()
             assert not Path(".kensa/scenarios/example.yaml").exists()
             assert not Path(".kensa/scenarios/example.jsonl").exists()
-            assert "add your scenarios" in result.output
+            assert "kensa capture -- <your-agent-command>" in result.output
 
     def test_init_runs_doctor(self, tmp_path: Path) -> None:
         runner = CliRunner()

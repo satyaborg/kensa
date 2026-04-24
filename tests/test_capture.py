@@ -1,0 +1,164 @@
+"""Tests for the `kensa capture` CLI command."""
+
+from __future__ import annotations
+
+import json
+import sys
+from pathlib import Path
+
+import pytest
+import yaml
+from click.testing import CliRunner
+
+from kensa.cli import cli
+from kensa.models import RunKind, RunManifest
+
+FIXTURE_AGENT = Path(__file__).parent / "fixtures" / "capture_agent.py"
+
+
+class _FakeCompleter:
+    def __init__(self, payload: str) -> None:
+        self.payload = payload
+
+    def complete(self, prompt: str, *, response_format: str | None = None) -> str:
+        return self.payload
+
+
+def _generated_scenario(run_command: list[str]) -> dict[str, object]:
+    return {
+        "id": "captured_happy",
+        "name": "Captured happy path",
+        "description": "Generated from a captured trace.",
+        "source": "traces",
+        "input": "refund this order please",
+        "run_command": run_command,
+        "expected_outcome": "Agent handles the task.",
+        "checks": [
+            {
+                "type": "output_contains",
+                "params": {"value": "captured"},
+                "description": "Keeps the captured behavior",
+            },
+            {"type": "max_turns", "params": {"max": 5}, "description": "Under 5 LLM calls"},
+        ],
+        "criteria": "The agent should complete the refund request clearly.",
+    }
+
+
+class TestCaptureCli:
+    def test_capture_writes_manifest_and_trace(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                [
+                    "capture",
+                    "-i",
+                    "refund this order please",
+                    "--",
+                    sys.executable,
+                    str(FIXTURE_AGENT),
+                ],
+            )
+
+            assert result.exit_code == 0
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.kind == RunKind.CAPTURE
+            assert manifest.command == [sys.executable, str(FIXTURE_AGENT)]
+            assert manifest.trace_path is not None
+            assert Path(manifest.trace_path).is_file()
+            assert manifest.span_count == 1
+            assert "kensa generate" in result.output
+
+    def test_capture_stores_argv_verbatim_when_input_omitted(self, tmp_path: Path) -> None:
+        """Without -i, the full argv is stored; no heuristic splitting."""
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                [
+                    "capture",
+                    "--",
+                    sys.executable,
+                    str(FIXTURE_AGENT),
+                    "refund this order please",
+                ],
+            )
+
+            assert result.exit_code == 0
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.command == [
+                sys.executable,
+                str(FIXTURE_AGENT),
+                "refund this order please",
+            ]
+
+    def test_capture_empty_argv_errors(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(cli, ["capture"])
+
+            assert result.exit_code == 2
+            assert "after `--`" in result.output
+            assert not Path(".kensa/runs").exists()
+
+    def test_capture_non_zero_exit_writes_manifest(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                ["capture", "--", sys.executable, "-c", "import sys; sys.exit(5)"],
+            )
+
+            assert result.exit_code == 5
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.kind == RunKind.CAPTURE
+            assert manifest.exit_code == 5
+
+    def test_capture_zero_spans_warns_but_writes_manifest(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                ["capture", "--", sys.executable, "-c", "print('hello from no spans')"],
+            )
+
+            assert result.exit_code == 0
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.kind == RunKind.CAPTURE
+            assert manifest.span_count == 0
+            assert manifest.trace_path is None
+            assert "no spans captured" in result.output
+
+    def test_generate_uses_latest_capture_by_default(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        runner = CliRunner()
+        payload = json.dumps(
+            {"scenarios": [_generated_scenario([sys.executable, str(FIXTURE_AGENT)])]}
+        )
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: _FakeCompleter(payload))
+
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            capture = runner.invoke(
+                cli,
+                [
+                    "capture",
+                    "-i",
+                    "refund this order please",
+                    "--",
+                    sys.executable,
+                    str(FIXTURE_AGENT),
+                ],
+            )
+            assert capture.exit_code == 0
+
+            result = runner.invoke(cli, ["generate"])
+
+            assert result.exit_code == 0
+            scenario = yaml.safe_load(Path(".kensa/scenarios/captured_happy.yaml").read_text())
+            assert scenario["run_command"] == [sys.executable, str(FIXTURE_AGENT)]

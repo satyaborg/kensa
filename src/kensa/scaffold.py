@@ -28,7 +28,7 @@ def pick_templates() -> tuple[str, str, str, str]:
     return _STUB_AGENT, _STUB_SCENARIO, "", ""
 
 
-def init_kensa(blank: bool = False, force: bool = False) -> InitResult:
+def init_kensa(include_example: bool = False, force: bool = False) -> InitResult:
     """Create the ``.kensa/`` scaffold (idempotent)."""
     dirs = [SCENARIO_DIR, TRACE_DIR, JUDGE_DIR, AGENT_DIR]
     directories_created: list[str] = []
@@ -41,7 +41,7 @@ def init_kensa(blank: bool = False, force: bool = False) -> InitResult:
     provider: str | None = None
     example_already_existed = False
 
-    if not blank:
+    if include_example:
         agent_file = AGENT_DIR / "example.py"
         dataset_file = SCENARIO_DIR / "example.jsonl"
         example = SCENARIO_DIR / "example.yaml"

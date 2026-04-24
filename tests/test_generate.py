@@ -24,6 +24,7 @@ from kensa.generate import (
 )
 from kensa.models import (
     CostInfo,
+    RunKind,
     RunManifest,
     Scenario,
     ScenarioRun,
@@ -551,6 +552,62 @@ class TestResolveTracePaths:
             with pytest.raises(FileNotFoundError, match="no trace files"):
                 resolve_trace_paths(run_id="r1", traces=())
 
+    def test_latest_capture_takes_priority_over_latest_eval(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            runs_dir.mkdir(parents=True)
+            eval_manifest = RunManifest(
+                run_id="20260422T120000000",
+                timestamp=datetime(2026, 4, 22, 12, 0, tzinfo=timezone.utc),
+                kind=RunKind.EVAL,
+                scenarios={
+                    "s1": [
+                        ScenarioRun(
+                            trace_path=".kensa/traces/eval.jsonl",
+                            exit_code=0,
+                            duration_seconds=1.0,
+                        )
+                    ]
+                },
+            )
+            capture_manifest = RunManifest(
+                run_id="20260422T120001000",
+                timestamp=datetime(2026, 4, 22, 12, 0, 1, tzinfo=timezone.utc),
+                kind=RunKind.CAPTURE,
+                command=["python", "agent.py"],
+                trace_path=".kensa/traces/capture.jsonl",
+                exit_code=0,
+                duration_seconds=1.0,
+                span_count=1,
+            )
+            (runs_dir / f"{eval_manifest.run_id}.json").write_text(eval_manifest.model_dump_json())
+            (runs_dir / f"{capture_manifest.run_id}.json").write_text(
+                capture_manifest.model_dump_json()
+            )
+
+            assert resolve_trace_paths(run_id=None, traces=()) == [
+                Path(".kensa/traces/capture.jsonl")
+            ]
+
+    def test_capture_manifest_without_trace_raises(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            runs_dir.mkdir(parents=True)
+            manifest = RunManifest(
+                run_id="r1",
+                timestamp=datetime(2026, 4, 22, tzinfo=timezone.utc),
+                kind=RunKind.CAPTURE,
+                command=["python", "agent.py"],
+                exit_code=0,
+                duration_seconds=1.0,
+                span_count=0,
+            )
+            (runs_dir / "r1.json").write_text(manifest.model_dump_json())
+            with pytest.raises(FileNotFoundError, match="has no trace file"):
+                resolve_trace_paths(run_id="r1", traces=())
+
 
 class TestFirstUserInput:
     def test_extracts_from_messages_shape(
@@ -691,6 +748,27 @@ class TestCollectRunCommands:
         runner = CliRunner()
         with runner.isolated_filesystem(temp_dir=tmp_path):
             assert collect_run_commands(run_id=None, scenario_dir=Path(".kensa/scenarios")) == []
+
+    def test_capture_manifest_returns_captured_command(self, tmp_path: Path) -> None:
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            runs_dir = Path(".kensa/runs")
+            runs_dir.mkdir(parents=True)
+            manifest = RunManifest(
+                run_id="r1",
+                timestamp=datetime(2026, 4, 22, tzinfo=timezone.utc),
+                kind=RunKind.CAPTURE,
+                command=["python", "agent.py"],
+                trace_path=".kensa/traces/r1.jsonl",
+                exit_code=0,
+                duration_seconds=1.0,
+                span_count=1,
+            )
+            (runs_dir / "r1.json").write_text(manifest.model_dump_json())
+
+            assert collect_run_commands(run_id="r1", scenario_dir=Path(".kensa/scenarios")) == [
+                ["python", "agent.py"]
+            ]
 
 
 class TestValidateScenarioId:

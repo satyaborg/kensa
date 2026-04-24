@@ -11,16 +11,16 @@ import yaml
 from kensa.models import Scenario, Span, SpanKind
 from kensa.runner import (
     _build_command,
-    _build_pythonpath,
-    _read_spans,
     _trace_filename,
-    _write_sitecustomize,
-    _write_trace,
+    build_pythonpath,
     load_dataset,
     load_dotenv,
     load_scenario,
     load_scenarios,
+    read_spans,
     read_trace,
+    write_sitecustomize,
+    write_trace,
 )
 
 
@@ -168,32 +168,32 @@ class TestReadSpans:
     def test_reads_oi_spans(self, tmp_path: Path, sample_oi_span: dict) -> None:
         spans_file = tmp_path / "spans.jsonl"
         spans_file.write_text(json.dumps(sample_oi_span) + "\n")
-        spans = _read_spans(tmp_path)
+        spans = read_spans(tmp_path)
         assert len(spans) == 1
         assert spans[0].kind == SpanKind.LLM
 
     def test_empty_dir(self, tmp_path: Path) -> None:
-        spans = _read_spans(tmp_path)
+        spans = read_spans(tmp_path)
         assert spans == []
 
     def test_skips_blank_lines(self, tmp_path: Path, sample_oi_span: dict) -> None:
         spans_file = tmp_path / "spans.jsonl"
         spans_file.write_text(json.dumps(sample_oi_span) + "\n\n")
-        spans = _read_spans(tmp_path)
+        spans = read_spans(tmp_path)
         assert len(spans) == 1
 
 
 class TestWriteTrace:
     def test_writes_jsonl(self, tmp_path: Path, sample_spans: list[Span]) -> None:
         output = tmp_path / "nested" / "trace.jsonl"
-        _write_trace(sample_spans, output)
+        write_trace(sample_spans, output)
         assert output.exists()
         lines = output.read_text().strip().split("\n")
         assert len(lines) == 2
 
     def test_creates_parent_dirs(self, tmp_path: Path, sample_llm_span: Span) -> None:
         output = tmp_path / "a" / "b" / "c" / "trace.jsonl"
-        _write_trace([sample_llm_span], output)
+        write_trace([sample_llm_span], output)
         assert output.exists()
 
 
@@ -440,7 +440,7 @@ class TestRunScenarios:
 
 class TestSitecustomizeInjection:
     def test_write_sitecustomize(self, tmp_path: Path) -> None:
-        _write_sitecustomize(str(tmp_path))
+        write_sitecustomize(str(tmp_path))
         sc = tmp_path / "sitecustomize.py"
         assert sc.exists()
         content = sc.read_text()
@@ -450,13 +450,13 @@ class TestSitecustomizeInjection:
     def test_build_pythonpath_prepends_tmp_dir(self, tmp_path: Path) -> None:
         import os
 
-        pp = _build_pythonpath(str(tmp_path), {})
+        pp = build_pythonpath(str(tmp_path), {})
         assert pp.split(os.pathsep)[0] == str(tmp_path)
 
     def test_build_pythonpath_preserves_existing(self, tmp_path: Path) -> None:
         import os
 
-        pp = _build_pythonpath(str(tmp_path), {"PYTHONPATH": "/existing/path"})
+        pp = build_pythonpath(str(tmp_path), {"PYTHONPATH": "/existing/path"})
         parts = pp.split(os.pathsep)
         assert parts[0] == str(tmp_path)
         assert "/existing/path" in parts
@@ -466,7 +466,7 @@ class TestSitecustomizeInjection:
         import os
 
         env = {"PYTHONPATH": "/from/dotenv"}
-        pp = _build_pythonpath(str(tmp_path), env)
+        pp = build_pythonpath(str(tmp_path), env)
         assert "/from/dotenv" in pp.split(os.pathsep)
 
 
@@ -649,7 +649,7 @@ class TestWarnExistingSitecustomize:
         """Warning fires when an existing sitecustomize.py is on the path."""
         import warnings
 
-        from kensa.runner import _warn_existing_sitecustomize
+        from kensa.runner import warn_existing_sitecustomize
 
         sc_dir = tmp_path / "fake_site"
         sc_dir.mkdir()
@@ -658,7 +658,7 @@ class TestWarnExistingSitecustomize:
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            _warn_existing_sitecustomize()
+            warn_existing_sitecustomize()
 
         warning_messages = [str(x.message) for x in w]
         assert any("sitecustomize.py was found" in m for m in warning_messages)
@@ -667,11 +667,11 @@ class TestWarnExistingSitecustomize:
         """No warning when no sitecustomize.py exists (normal case)."""
         import warnings
 
-        from kensa.runner import _warn_existing_sitecustomize
+        from kensa.runner import warn_existing_sitecustomize
 
         with warnings.catch_warnings(record=True) as w:
             warnings.simplefilter("always")
-            _warn_existing_sitecustomize()
+            warn_existing_sitecustomize()
 
         sitecustomize_warnings = [x for x in w if "sitecustomize" in str(x.message)]
         assert len(sitecustomize_warnings) == 0

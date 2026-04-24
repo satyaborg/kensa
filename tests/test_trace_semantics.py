@@ -9,7 +9,7 @@ from pathlib import Path
 from kensa.analyzer import analyze_traces
 from kensa.checks import check_no_repeat_calls
 from kensa.models import FlagType
-from kensa.runner import _read_spans, _write_trace, read_trace
+from kensa.runner import read_spans, read_trace, write_trace
 from kensa.trace_semantics import collect_tool_calls, repeated_tool_names
 from kensa.translate import oi_to_kensa
 from kensa.utils import count_tool_calls, get_tool_names, get_tool_names_ordered
@@ -175,11 +175,11 @@ class TestTraceSemantics:
             + "\n"
         )
 
-        translated = _read_spans(spans_dir)
+        translated = read_spans(spans_dir)
         assert [tool.name for tool in collect_tool_calls(translated, ordered=True)] == ["refund"]
 
         persisted = tmp_path / "persisted" / "trace.jsonl"
-        _write_trace(translated, persisted)
+        write_trace(translated, persisted)
         reloaded = read_trace(str(persisted))
 
         assert [tool.name for tool in collect_tool_calls(reloaded, ordered=True)] == ["refund"]

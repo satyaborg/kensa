@@ -26,8 +26,10 @@ ruff format --check src/ tests/                           # CI format check (no 
 uv run ty check
 
 # CLI
-kensa init                                               # scaffold .kensa/ with example scenario
-kensa init --blank                                       # scaffold .kensa/ without examples
+kensa init                                               # scaffold .kensa/ (bare; no example)
+kensa init --example                                     # scaffold .kensa/ with a demo agent + scenario
+kensa capture -- <cmd> [args...]                         # capture one real agent invocation as a trace
+kensa capture -i "<input>" -- <cmd> [args...]            # capture with an explicit input string (recommended)
 kensa doctor                                             # pre-flight environment checks
 kensa run                                                # run all scenarios
 kensa run --scenario-id <name>                           # run specific scenario

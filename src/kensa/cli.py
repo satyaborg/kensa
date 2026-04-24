@@ -12,7 +12,7 @@ import click
 from rich.markup import escape as rich_escape
 
 from kensa.judge import JudgeProvider
-from kensa.models import Result, ResultStatus, RunManifest
+from kensa.models import Result, ResultStatus, RunKind, RunManifest
 from kensa.paths import (
     REPORT_DIR,
     RESULT_DIR,
@@ -48,6 +48,7 @@ def _get_version() -> str:
 
 _COMMAND_ORDER = [
     "init",
+    "capture",
     "generate",
     "doctor",
     "run",
@@ -321,6 +322,12 @@ def judge(run_id: str | None, model: str | None, fmt: str) -> None:
                 manifest = RunManifest.model_validate_json(f.read())
         else:
             manifest = _latest_manifest()
+        if manifest.kind != RunKind.EVAL:
+            click.echo(
+                f"Error: run {manifest.run_id!r} is a capture run. Use `kensa generate` instead.",
+                err=True,
+            )
+            sys.exit(1)
 
         s = Steps(quiet=fmt == "json")
         s.start(f"kensa judge [dim]{manifest.run_id}[/dim]")
@@ -390,7 +397,15 @@ def report(run_id: str | None, fmt: str, output: str | None, verbose: bool) -> N
         if not run_id:
             run_id = _latest_manifest().run_id
         _validate_run_id(run_id)
-        from kensa.paths import results_path
+        from kensa.paths import manifest_path, results_path
+
+        mpath = manifest_path(run_id)
+        if mpath.exists():
+            manifest = RunManifest.model_validate_json(mpath.read_text())
+            if manifest.kind != RunKind.EVAL:
+                raise FileNotFoundError(
+                    f"Run '{run_id}' is a capture run.\n  Use: kensa generate --run-id {run_id}"
+                )
 
         rpath = results_path(run_id)
         if not rpath.exists():
@@ -559,10 +574,9 @@ INSTALL_AGENT_CHOICES = [c for c in AGENT_CHOICES if c != "none"]
 
 
 @cli.command()
-@click.option("--force", is_flag=True, help="Overwrite existing example scenario.")
-@click.option(
-    "--blank", is_flag=True, help="Scaffold directories only, skip example agent and scenario."
-)
+@click.option("--force", is_flag=True, help="Overwrite existing demo files.")
+@click.option("--example", is_flag=True, help="Scaffold a demo agent and demo scenario.")
+@click.option("--blank", is_flag=True, hidden=True, help="Deprecated alias for scaffold-only init.")
 @click.option(
     "-a",
     "--agent",
@@ -579,19 +593,22 @@ INSTALL_AGENT_CHOICES = [c for c in AGENT_CHOICES if c != "none"]
 )
 def init(
     force: bool,
+    example: bool,
     blank: bool,
     agent_choice: str | None,
     install_cli_flag: bool | None,
 ) -> None:
-    """Set up .kensa/ dir with example agent."""
+    """Set up the .kensa/ directory."""
     from kensa.doctor import run_doctor
     from kensa.scaffold import init_kensa
     from kensa.skills_install import ensure_cli_in_project, install_skills
 
+    include_example = example and not blank
+
     s = Steps()
     s.start("kensa init")
 
-    result = init_kensa(blank=blank, force=force)
+    result = init_kensa(include_example=include_example, force=force)
 
     if result.directories_created:
         s.item("created .kensa/")
@@ -599,7 +616,7 @@ def init(
         s.item(".kensa/ already scaffolded")
     for f in result.files_written:
         s.item(f"wrote {f}")
-    if not blank and result.example_already_existed:
+    if include_example and result.example_already_existed:
         s.item("example scenario ready (--force to regenerate)")
 
     interactive = _is_interactive()
@@ -644,7 +661,7 @@ def init(
         )
 
     checks = run_doctor()
-    if blank:
+    if not include_example:
         checks = [(n, ok, d) for n, ok, d in checks if n != "scenarios"]
     passed = sum(1 for _, ok, _ in checks if ok)
     failures = [(name, detail) for name, ok, detail in checks if not ok]
@@ -659,12 +676,15 @@ def init(
     next_steps: list[str] = []
     if failures:
         next_steps.append("Fix issues above (see kensa doctor for details)")
-    if blank:
-        next_steps.append(".kensa/scenarios/   ← add your scenarios here")
-    else:
+    if include_example:
         next_steps += [
             "kensa eval          ← run the example",
             ".kensa/scenarios/   ← add your own scenarios",
+        ]
+    else:
+        next_steps += [
+            "kensa capture -- <your-agent-command>",
+            "kensa generate      ← turn captured traces into scenarios",
         ]
     if not failures:
         next_steps.append("kensa doctor        ← full environment details")
@@ -680,9 +700,63 @@ def init(
 
 
 @cli.command(
+    context_settings={"ignore_unknown_options": True, "allow_extra_args": True},
     epilog="""\b
 Examples:
-  kensa generate                       # from latest run's traces
+  kensa capture -i "refund this order" -- python agent.py
+  kensa capture -i "classify this ticket" -- uv run python src/agent.py
+  kensa capture -- python agent.py                # agent reads its own input
+""",
+)
+@click.option(
+    "--input",
+    "-i",
+    "captured_input",
+    default=None,
+    help="Input string appended as the final argv element (mirrors scenario.input).",
+)
+@click.argument("argv", nargs=-1, type=click.UNPROCESSED)
+def capture(captured_input: str | None, argv: tuple[str, ...]) -> None:
+    """Capture one real agent invocation so `kensa generate` can reuse the command."""
+    from kensa.capture import capture_command
+
+    if not argv:
+        click.echo(
+            "Error: pass the child command after `--`.\n"
+            '  Example: kensa capture -i "refund this order" -- python agent.py',
+            err=True,
+        )
+        sys.exit(2)
+
+    s = Steps()
+    s.start("kensa capture")
+    s.step("Capturing one real run...")
+    manifest = capture_command(list(argv), captured_input=captured_input)
+    s.item(f"run_id: {manifest.run_id}")
+    if manifest.span_count:
+        s.item(f"spans: {manifest.span_count}")
+    else:
+        s.item(
+            "no spans captured; install the matching SDK instrumentor or call kensa.instrument()",
+            ok=False,
+        )
+    if manifest.trace_path:
+        s.item(f"trace: {manifest.trace_path}")
+    if manifest.exit_code != 0:
+        s.item(f"child exited with {manifest.exit_code}", ok=False)
+    s.line()
+    s.text("Next steps")
+    s.line()
+    s.text("1. kensa generate")
+    s.line()
+    s.end()
+    sys.exit(manifest.exit_code or 0)
+
+
+@cli.command(
+    epilog="""\b
+Examples:
+  kensa generate                       # from latest capture or latest run
   kensa generate --run-id abc123
   kensa generate --trace path/to/trace.jsonl -n 5
   kensa generate --dry-run""",
@@ -736,7 +810,7 @@ def generate(
     source_scenario_dir: str | None,
     run_command_overrides: tuple[str, ...],
 ) -> None:
-    """Generate eval scenarios from existing traces."""
+    """Generate eval scenarios from captured traces."""
     import shlex
 
     from kensa.generate import (

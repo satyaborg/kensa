@@ -26,6 +26,7 @@ from kensa.models import (
     JudgePromptSpec,
     Result,
     ResultStatus,
+    RunKind,
     RunManifest,
     Scenario,
     Span,
@@ -266,17 +267,29 @@ def _progress_bridge(ctx: Context | None, loop: asyncio.AbstractEventLoop) -> tu
 
 
 @mcp.tool
-def init(blank: bool = False, force: bool = False) -> InitResponse | MCPError:
+def init(
+    force: bool = False,
+    example: bool = False,
+    blank: bool | None = None,
+) -> InitResponse | MCPError:
     """Scaffold ``.kensa/`` (idempotent).
 
-    Creates ``scenarios/``, ``traces/``, ``judges/``, ``agents/``. Unless
-    ``blank`` is true, writes an example agent and scenario chosen from
+    Creates ``scenarios/``, ``traces/``, ``judges/``, ``agents/``. When
+    ``example`` is true, writes a demo agent and scenario chosen from the
     available API keys. ``force`` overwrites an existing example.
+
+    Behavior change: as of the capture-command release, the no-arg
+    ``init()`` call scaffolds the directory empty instead of writing the
+    example. Pass ``example=True`` to restore the previous behavior.
+    ``blank`` is accepted as an inverse alias for callers pinned to the
+    pre-capture signature (``blank=True`` suppresses ``example``) but does
+    not flip the new default.
     """
     from kensa.scaffold import init_kensa
 
+    include_example = example and blank is not True
     try:
-        result = init_kensa(blank=blank, force=force)
+        result = init_kensa(include_example=include_example, force=force)
     except OSError as e:
         return MCPError(error=str(e), code="internal")
     return InitResponse(**result.model_dump())
@@ -601,6 +614,8 @@ def runs_list() -> list[RunListItem]:
             manifest = RunManifest.model_validate_json(p.read_text())
         except (OSError, ValueError):
             continue
+        if manifest.kind != RunKind.EVAL:
+            continue
         total_runs = sum(len(r) for r in manifest.scenarios.values())
         completed = sum(1 for r in manifest.scenarios.values() for sr in r if sr.exit_code == 0)
         out.append(
@@ -625,6 +640,8 @@ def run_detail(run_id: str) -> RunDetail:
         manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
     except FileNotFoundError as e:
         raise ResourceError(f"Run not found: {run_id}") from e
+    if manifest.kind != RunKind.EVAL:
+        raise ResourceError(f"Run {run_id!r} is a capture run")
 
     summary: JudgeSummary | None = None
     try:
