@@ -29,6 +29,38 @@ Detects your API keys and scaffolds accordingly:
 
 Creates `.kensa/agents/example.py` and `.kensa/scenarios/example.yaml`. Run `kensa eval` immediately after to verify your setup. Use `--blank` if you want an empty `.kensa/` and plan to write scenarios yourself or via a coding agent.
 
+## kensa generate
+
+Synthesize scenario YAMLs from captured traces using an LLM. Run `kensa run` first so there are traces to mine.
+
+```bash
+kensa generate                               # 3 scenarios from the latest run
+kensa generate -n 5                          # 5 scenarios
+kensa generate --run-id 20260423T120000      # from a specific run
+kensa generate --trace path/to/trace.jsonl   # from an explicit trace file (repeatable)
+kensa generate --dry-run                     # print YAML to stdout, write nothing
+kensa generate --force                       # overwrite existing scenario files
+kensa generate --run-command 'python .kensa/agents/app.py'  # override entrypoint hint
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `--run-id` | latest | Run ID to source traces from |
+| `--trace` | — | Specific trace file(s); repeatable. Overrides `--run-id` |
+| `-n, --count` | `3` | Number of scenarios to generate (1–20) |
+| `--model` | resolved | LLM model override (e.g. `claude-sonnet-4-6`) |
+| `--dry-run` | off | Print YAML to stdout; do not write files |
+| `--force` | off | Overwrite existing scenario files |
+| `--scenario-dir` | `.kensa/scenarios` | Where to write generated scenarios |
+| `--source-scenario-dir` | auto | Where to scan for existing scenarios when recovering the observed `run_command`. Defaults to `--scenario-dir` if it already has scenarios, otherwise `.kensa/scenarios`. |
+| `--run-command` | inferred | Entrypoint argv to hint to the LLM (repeatable) |
+
+Source priority: `--trace` → `--run-id` → latest run manifest. When the manifest references exactly one `run_command`, generated scenarios are rewritten to use it verbatim; with multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
+
+Model resolution mirrors `kensa judge`: `KENSA_JUDGE_MODEL` env var → `ANTHROPIC_API_KEY` (uses `claude-sonnet-4-6`) → `OPENAI_API_KEY` (uses `gpt-5.4-mini`). Keys can live in a `.env` walked up from cwd.
+
+Generated scenarios must include at least one of `max_cost` or `max_turns`, must have either `checks` or `criteria`, and cannot reference a `judge:` file (use inline `criteria` instead). Scenarios that fail these rules are surfaced in the CLI output with the reason.
+
 ## kensa eval
 
 Run + judge + report in one shot.

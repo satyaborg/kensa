@@ -82,6 +82,16 @@ def _skip_unless_openai_ready() -> None:
         pytest.skip("no openai instrumentor installed (uv sync --extra openai)")
 
 
+def _strip_markdown_fences(text: str) -> str:
+    """Strip a leading ``` fence (optionally ```json) and a trailing ``` fence."""
+    stripped = text.strip()
+    if not stripped.startswith("```"):
+        return stripped
+    lines = stripped.split("\n")
+    lines = lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+    return "\n".join(lines).strip()
+
+
 def _write_agent(tmp_path: Path, body: str, filename: str = "agent.py") -> Path:
     path = tmp_path / filename
     path.write_text(textwrap.dedent(body).lstrip())
@@ -414,6 +424,247 @@ class TestOpenaiJudgeEndToEnd:
         assert result.judge_result.passed is False
         assert result.judge_result.verdict == ResultStatus.FAIL
         assert result.judge_result.reasoning
+
+
+@pytest.mark.integration
+class TestGenerateEndToEnd:
+    def test_generate_from_real_trace_produces_executable_scenarios(self, tmp_path: Path) -> None:
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+        prompt = "Classify this ticket priority as P1, P2, or P3: Our checkout is down."
+
+        scenario = Scenario(
+            id="seed",
+            name="Seed",
+            source=ScenarioSource.CODE,
+            input=prompt,
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(scenario, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+        trace_path = Path(seed_run.trace_path)
+
+        from kensa.generate import _scenario_to_yaml, generate_from_traces
+        from kensa.runner import load_scenario
+
+        scenarios = generate_from_traces(
+            [trace_path],
+            count=2,
+            run_commands=[run_command],
+        )
+
+        assert scenarios, "live generator returned no valid scenarios"
+        assert len(scenarios) <= 2, "generator should cap to requested count"
+
+        generated = scenarios[0]
+        assert generated.source == ScenarioSource.TRACES
+        assert generated.run_command == run_command, (
+            f"LLM did not reuse the observed run_command: got {generated.run_command}"
+        )
+        assert generated.checks, "generated scenario should have at least one check"
+        assert generated.id
+        assert generated.name
+
+        yaml_text = _scenario_to_yaml(generated)
+        out_path = tmp_path / f"{generated.id}.yaml"
+        out_path.write_text(yaml_text)
+        reloaded = load_scenario(out_path)
+        assert reloaded.id == generated.id
+        assert reloaded.run_command == run_command
+
+    def test_generated_scenario_roundtrips_through_runner(self, tmp_path: Path) -> None:
+        """Seed → generate → re-run → checks. Closes the generate pipeline loop."""
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+        prompt = "Say hello."
+
+        seed = Scenario(
+            id="seed",
+            name="Seed",
+            source=ScenarioSource.CODE,
+            input=prompt,
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.checks import run_checks
+        from kensa.generate import generate_from_traces
+
+        scenarios = generate_from_traces(
+            [Path(seed_run.trace_path)],
+            count=1,
+            run_commands=[run_command],
+        )
+        assert scenarios, "live generator returned no valid scenarios"
+        generated = scenarios[0]
+
+        _, generated_run = run_scenario(generated, trace_dir=str(trace_dir))
+        assert generated_run.exit_code == 0, (
+            f"generated scenario failed to execute:\n{generated_run.stderr}"
+        )
+
+        spans = read_trace(generated_run.trace_path)
+        assert spans, "generated scenario produced no spans"
+
+        check_dicts = [c.model_dump(mode="json") for c in generated.checks]
+        check_results = run_checks(spans, check_dicts)
+        assert len(check_results) == len(generated.checks), (
+            "run_checks dropped or duplicated a check"
+        )
+
+    def test_generate_from_openai_trace(self, tmp_path: Path) -> None:
+        """Same pipeline as Anthropic, but through the OpenAI provider."""
+        _skip_unless_openai_ready()
+        os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
+        os.environ.pop("ANTHROPIC_API_KEY", None)
+
+        agent_path = _write_agent(tmp_path, _OPENAI_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+
+        seed = Scenario(
+            id="seed_openai",
+            name="Seed OpenAI",
+            source=ScenarioSource.CODE,
+            input="Say hello.",
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.generate import generate_from_traces
+
+        scenarios = generate_from_traces(
+            [Path(seed_run.trace_path)],
+            count=1,
+            run_commands=[run_command],
+        )
+        assert scenarios, "openai generator returned no valid scenarios"
+        assert scenarios[0].run_command == run_command
+        assert scenarios[0].checks
+
+    def test_cli_generate_end_to_end(self, tmp_path: Path) -> None:
+        """kensa generate CLI wires resolve_trace_paths + completer + write together."""
+        from click.testing import CliRunner
+
+        _skip_unless_anthropic_ready()
+        os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+
+        agent_path = _write_agent(tmp_path, _ANTHROPIC_SIMPLE_AGENT)
+        run_command = ["python", str(agent_path)]
+
+        seed = Scenario(
+            id="seed_cli",
+            name="Seed CLI",
+            source=ScenarioSource.CODE,
+            input="Say hello.",
+            run_command=run_command,
+        )
+        trace_dir = tmp_path / "traces"
+        trace_dir.mkdir(exist_ok=True)
+        _, seed_run = run_scenario(seed, trace_dir=str(trace_dir))
+        assert seed_run.exit_code == 0, seed_run.stderr
+
+        from kensa.cli import cli
+
+        scenarios_dir = tmp_path / "scenarios"
+        result = CliRunner().invoke(
+            cli,
+            [
+                "generate",
+                "--trace",
+                seed_run.trace_path,
+                "-n",
+                "1",
+                "--scenario-dir",
+                str(scenarios_dir),
+                "--run-command",
+                " ".join(run_command),
+            ],
+        )
+        assert result.exit_code == 0, result.output
+        written = list(scenarios_dir.glob("*.yaml"))
+        assert len(written) == 1, f"expected 1 scenario file, got {written}"
+        assert "1 written" in result.output
+
+
+@pytest.mark.integration
+class TestLlmCompleterEndToEnd:
+    """Live Completer round-trips; sub-cent total at haiku / gpt-5.4-mini prices."""
+
+    @staticmethod
+    def _skip_unless_anthropic_sdk() -> None:
+        ensure_dotenv_loaded()
+        if not os.environ.get("ANTHROPIC_API_KEY"):
+            pytest.skip("ANTHROPIC_API_KEY not set")
+        if importlib.util.find_spec("anthropic") is None:
+            pytest.skip("anthropic SDK not installed")
+
+    @staticmethod
+    def _skip_unless_openai_sdk() -> None:
+        ensure_dotenv_loaded()
+        if not os.environ.get("OPENAI_API_KEY"):
+            pytest.skip("OPENAI_API_KEY not set")
+        if importlib.util.find_spec("openai") is None:
+            pytest.skip("openai SDK not installed")
+
+    def test_anthropic_completer_plain_roundtrip(self) -> None:
+        self._skip_unless_anthropic_sdk()
+        from kensa.llm import AnthropicCompleter
+
+        completer = AnthropicCompleter(model=_anthropic_model(), max_tokens=50)
+        text = completer.complete("Reply with exactly the word: hello")
+        assert text.strip(), "completer returned empty text"
+        assert "hello" in text.lower()
+
+    def test_anthropic_completer_json_mode_returns_parseable_json(self) -> None:
+        import json
+
+        self._skip_unless_anthropic_sdk()
+        from kensa.llm import AnthropicCompleter
+
+        completer = AnthropicCompleter(model=_anthropic_model(), max_tokens=50)
+        text = completer.complete(
+            'Return this JSON exactly and nothing else: {"ok": true}',
+            response_format="json",
+        )
+        payload = json.loads(_strip_markdown_fences(text))
+        assert payload.get("ok") is True
+
+    def test_openai_completer_plain_roundtrip(self) -> None:
+        self._skip_unless_openai_sdk()
+        from kensa.llm import OpenAICompleter
+
+        completer = OpenAICompleter(model=_openai_model(), max_tokens=50)
+        text = completer.complete("Reply with exactly the word: hello")
+        assert text.strip(), "completer returned empty text"
+        assert "hello" in text.lower()
+
+    def test_openai_completer_json_mode_returns_parseable_json(self) -> None:
+        import json
+
+        self._skip_unless_openai_sdk()
+        from kensa.llm import OpenAICompleter
+
+        completer = OpenAICompleter(model=_openai_model(), max_tokens=50)
+        text = completer.complete(
+            'Return this JSON exactly and nothing else: {"ok": true}',
+            response_format="json",
+        )
+        payload = json.loads(text)
+        assert payload.get("ok") is True
 
 
 @pytest.mark.integration

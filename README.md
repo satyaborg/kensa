@@ -83,6 +83,7 @@ uv add "kensa[all]"
 | --- | --- |
 | `kensa init --blank` | Scaffold `.kensa/` without example content |
 | `kensa doctor` | Check instrumentation, config, and environment readiness |
+| `kensa generate` | Synthesize scenario YAMLs from captured traces via an LLM |
 | `kensa eval` | Run + judge + report in one command |
 | `kensa report` | Show the latest results in terminal, Markdown, JSON, or HTML |
 | `kensa analyze` | Flag slow, expensive, anomalous, or error-prone traces |
