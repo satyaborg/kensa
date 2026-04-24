@@ -271,6 +271,7 @@ Examples:
 def judge(run_id: str | None, model: str | None, fmt: str) -> None:
     """Score the latest run with checks + LLM judge."""
     from kensa.judge import get_judge, manifest_requires_judge
+    from kensa.paths import CaptureOnlyWorkspaceError
 
     try:
         if run_id:
@@ -322,6 +323,9 @@ def judge(run_id: str | None, model: str | None, fmt: str) -> None:
             s.result(summary_line(results))
             s.end()
 
+    except CaptureOnlyWorkspaceError as e:
+        click.echo(f"Error: {e}", err=True)
+        sys.exit(1)
     except FileNotFoundError as e:
         click.echo(f"Error: {e}\n  Run: kensa run", err=True)
         sys.exit(1)
@@ -707,9 +711,9 @@ def generate(
     import shlex
 
     from kensa.generate import (
+        collect_noinput_commands,
         collect_run_commands,
         generate_from_traces,
-        is_verbatim_replay_capture,
         resolve_trace_paths,
         write_scenarios,
     )
@@ -748,11 +752,17 @@ def generate(
         else:
             s.item("entrypoints: (none found; LLM may hallucinate — pass --run-command)", ok=False)
 
-        verbatim = is_verbatim_replay_capture(
-            run_id, list(trace_paths) if traces else None
-        )
-        if verbatim:
-            s.item("replay mode: verbatim (capture had no -i; scenario.input will be empty)")
+        noinput_commands: list[list[str]] = []
+        if not run_command_overrides:
+            noinput_commands = collect_noinput_commands(
+                run_id,
+                trace_paths=list(trace_paths) if traces else None,
+            )
+        if noinput_commands:
+            s.item(
+                f"verbatim replay: {len(noinput_commands)} command(s) will ignore "
+                "scenario.input (captured without -i)"
+            )
 
         import warnings
 
@@ -766,7 +776,7 @@ def generate(
                 count=count,
                 model=model,
                 run_commands=run_commands,
-                verbatim_replay=verbatim,
+                noinput_commands=noinput_commands or None,
             )
         for w in caught:
             s.item(str(w.message), ok=False)

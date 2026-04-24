@@ -38,6 +38,7 @@ from kensa.paths import (
     RUN_DIR,
     SCENARIO_DIR,
     TRACE_DIR,
+    CaptureOnlyWorkspaceError,
     latest_manifest,
     manifest_path,
     report_path,
@@ -402,6 +403,12 @@ async def judge(
 
     try:
         manifest = _load_manifest_or_latest(run_id)
+    except CaptureOnlyWorkspaceError as e:
+        return MCPError(
+            error=str(e),
+            code="run_not_found",
+            hint="Call generate() to turn captures into scenarios, then run().",
+        )
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call run() first.")
 
@@ -593,6 +600,12 @@ def report(
                     hint="Call generate() to turn the capture into scenarios, then run().",
                 )
         results = _load_results(run_id)
+    except CaptureOnlyWorkspaceError as e:
+        return MCPError(
+            error=str(e),
+            code="run_not_found",
+            hint="Call generate() to turn captures into scenarios, then run() and judge().",
+        )
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call judge() or eval() first.")
 

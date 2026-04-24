@@ -360,6 +360,16 @@ class TestJudge:
         assert out.code == "run_not_evalable"
         assert not Path(".kensa/results/20260301T000010.json").exists()
 
+    def test_capture_only_workspace_hint_points_to_generate(self, tmp_path: Path) -> None:
+        """Bare judge() in a capture-only workspace must send clients to generate(), not run()."""
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000011")
+            out = asyncio.run(judge())
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_found"
+        assert out.hint is not None
+        assert "generate" in out.hint
+
     def test_malformed_yaml_returns_scenario_invalid(self, tmp_path: Path) -> None:
         """A malformed scenario YAML referenced by the manifest must surface as
         a typed MCPError(scenario_invalid), not bubble out as a generic error."""
@@ -485,6 +495,16 @@ class TestReport:
             out = report(run_id="20260301T000020")
         assert isinstance(out, MCPError)
         assert out.code == "run_not_evalable"
+
+    def test_capture_only_workspace_hint_points_to_generate(self, tmp_path: Path) -> None:
+        """Bare report() in a capture-only workspace must hint generate(), not judge()/eval()."""
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000021")
+            out = report()
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_found"
+        assert out.hint is not None
+        assert "generate" in out.hint
 
     def test_renders(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):
