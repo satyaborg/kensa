@@ -174,13 +174,9 @@ def validate_run_id(run_id: str) -> str:
 
 def latest_manifest() -> RunManifest:
     """Find the most recent run manifest."""
-    runs_dir = Path(".kensa/runs")
-    if not runs_dir.exists():
-        raise FileNotFoundError("No runs found. Run `kensa run` first.")
-    manifests = sorted(runs_dir.glob("*.json"))
-    if not manifests:
-        raise FileNotFoundError("No run manifests found. Run `kensa run` first.")
-    with open(manifests[-1]) as f:
+    from kensa.paths import latest_manifest as latest_manifest_path
+
+    with open(latest_manifest_path()) as f:
         return RunManifest.model_validate_json(f.read())
 
 

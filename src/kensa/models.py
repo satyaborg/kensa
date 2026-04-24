@@ -44,6 +44,11 @@ class ResultStatus(str, enum.Enum):
     UNCERTAIN = "uncertain"
 
 
+class RunKind(str, enum.Enum):
+    EVAL = "eval"
+    CAPTURE = "capture"
+
+
 class FlagType(str, enum.Enum):
     ERROR = "error"
     COST_OUTLIER = "cost_outlier"
@@ -413,24 +418,58 @@ class RunManifest(BaseModel):
 
     run_id: str
     timestamp: datetime
+    kind: RunKind = RunKind.EVAL
     scenarios: dict[str, list[ScenarioRun]] = Field(default_factory=dict)
+    command: list[str] | None = None
+    captured_input: str | None = None
+    trace_path: str | None = None
+    exit_code: int | None = None
+    duration_seconds: float | None = None
+    stdout: str | None = None
+    stderr: str | None = None
+    span_count: int | None = None
 
     @model_validator(mode="before")
     @classmethod
     def _migrate_single_to_list(cls, data: Any) -> Any:
         """Auto-migrate old format: wrap single ScenarioRun in a list."""
-        if isinstance(data, dict) and "scenarios" in data:
-            scenarios = data["scenarios"]
-            if isinstance(scenarios, dict):
-                migrated = {}
-                for k, v in scenarios.items():
-                    if isinstance(v, dict) and "trace_path" in v:
-                        migrated[k] = [v]
-                    elif isinstance(v, list):
-                        migrated[k] = v
-                    elif isinstance(v, ScenarioRun):
-                        migrated[k] = [v]
-                    else:
-                        migrated[k] = v
-                data = {**data, "scenarios": migrated}
+        if isinstance(data, dict):
+            migrated_data = {**data}
+            migrated_data.setdefault("kind", RunKind.EVAL.value)
+            if "scenarios" in migrated_data:
+                scenarios = migrated_data["scenarios"]
+                if isinstance(scenarios, dict):
+                    migrated = {}
+                    for k, v in scenarios.items():
+                        if isinstance(v, dict) and "trace_path" in v:
+                            migrated[k] = [v]
+                        elif isinstance(v, list):
+                            migrated[k] = v
+                        elif isinstance(v, ScenarioRun):
+                            migrated[k] = [v]
+                        else:
+                            migrated[k] = v
+                    migrated_data["scenarios"] = migrated
+            data = migrated_data
         return data
+
+    @model_validator(mode="after")
+    def _validate_shape(self) -> RunManifest:
+        if self.kind == RunKind.CAPTURE:
+            if self.scenarios:
+                raise ValueError("capture manifests must not contain scenarios")
+            if not self.command:
+                raise ValueError("capture manifests require a command")
+            if self.exit_code is None:
+                raise ValueError("capture manifests require an exit_code")
+            if self.duration_seconds is None:
+                raise ValueError("capture manifests require a duration_seconds value")
+        return self
+
+    @property
+    def is_capture(self) -> bool:
+        return self.kind == RunKind.CAPTURE
+
+    @property
+    def is_eval(self) -> bool:
+        return self.kind == RunKind.EVAL

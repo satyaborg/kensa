@@ -9,8 +9,8 @@ from typing import Any, cast
 
 import yaml
 
-from kensa.models import Check, CheckType, RunManifest, Scenario, Span
-from kensa.paths import SCENARIO_DIR, latest_manifest, manifest_path
+from kensa.models import Check, CheckType, RunKind, RunManifest, Scenario, Span
+from kensa.paths import SCENARIO_DIR, latest_capture_manifest, latest_manifest, manifest_path
 
 MAX_TRACES_IN_PROMPT = 10
 MAX_OUTPUT_CHARS = 500
@@ -173,8 +173,16 @@ def resolve_trace_paths(
     if traces:
         return [Path(t) for t in traces]
 
-    manifest_file = manifest_path(run_id) if run_id else latest_manifest()
+    manifest_file = _resolve_generate_manifest(run_id)
     manifest = RunManifest.model_validate_json(manifest_file.read_text())
+
+    if manifest.kind == RunKind.CAPTURE:
+        if not manifest.trace_path:
+            raise FileNotFoundError(
+                f"Capture {manifest.run_id} has no trace file. Re-run `kensa capture` with an "
+                "instrumented SDK or call `kensa.instrument()`."
+            )
+        return [Path(manifest.trace_path)]
 
     paths: list[Path] = [
         Path(sr.trace_path) for runs in manifest.scenarios.values() for sr in runs if sr.trace_path
@@ -184,6 +192,86 @@ def resolve_trace_paths(
             f"Manifest {manifest.run_id} has no trace files. Run `kensa run` first."
         )
     return paths
+
+
+def _resolve_generate_manifest(run_id: str | None) -> Path:
+    """Resolve the manifest source for ``kensa generate``.
+
+    Prefers an explicit run ID, then the latest capture, then the latest eval run.
+    """
+    if run_id:
+        return manifest_path(run_id)
+    try:
+        return latest_capture_manifest()
+    except FileNotFoundError:
+        return latest_manifest()
+
+
+def is_verbatim_replay_capture(run_id: str | None, trace_paths: list[Path] | None) -> bool:
+    """Return True iff the resolved source manifest is a capture with no explicit ``-i`` input.
+
+    Such captures have the prompt baked into ``manifest.command`` argv, so
+    generated scenarios must leave ``scenario.input`` empty to avoid a
+    double-append on replay.
+    """
+    manifest: RunManifest | None = None
+    try:
+        if run_id:
+            manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
+        elif trace_paths:
+            manifest = _find_manifest_for_traces(trace_paths)
+        else:
+            manifest = RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+    except (FileNotFoundError, ValueError):
+        return False
+    if manifest is None:
+        return False
+    return manifest.kind == RunKind.CAPTURE and manifest.captured_input is None
+
+
+def collect_noinput_commands(
+    run_id: str | None,
+    *,
+    trace_paths: list[Path] | None = None,
+) -> list[list[str]]:
+    """Return run_commands whose argv already bakes in the agent input.
+
+    A generated scenario that reuses one of these argvs must leave
+    ``scenario.input`` empty so the runner does not double-append. Only
+    no-``-i`` capture manifests qualify; ``-i`` captures and eval manifests
+    expect ``scenario.input`` to be appended on replay.
+
+    When the caller passes multiple traces spanning multiple manifests,
+    every matching no-``-i`` capture's command is included, so a mixed
+    generate still marks the right argvs for verbatim replay.
+    """
+    manifests: list[RunManifest] = []
+    if run_id:
+        try:
+            manifests = [RunManifest.model_validate_json(manifest_path(run_id).read_text())]
+        except (FileNotFoundError, ValueError):
+            return []
+    elif trace_paths:
+        manifests = _find_manifests_for_traces(trace_paths)
+    else:
+        try:
+            manifests = [
+                RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+            ]
+        except (FileNotFoundError, ValueError):
+            return []
+
+    out: list[list[str]] = []
+    seen: set[tuple[str, ...]] = set()
+    for m in manifests:
+        if m.kind != RunKind.CAPTURE or m.captured_input is not None or not m.command:
+            continue
+        key = tuple(m.command)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(list(m.command))
+    return out
 
 
 def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
@@ -212,35 +300,71 @@ def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
 def _manifest_scenario_ids(run_id: str | None) -> set[str]:
     """Return the set of scenario ids recorded in a manifest. Empty on failure."""
     try:
-        manifest_file = manifest_path(run_id) if run_id else latest_manifest()
+        manifest_file = _resolve_generate_manifest(run_id)
         manifest = RunManifest.model_validate_json(manifest_file.read_text())
     except (FileNotFoundError, ValueError):
+        return set()
+    if manifest.kind != RunKind.EVAL:
         return set()
     return set(manifest.scenarios.keys())
 
 
-def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
-    """Find the most recent manifest whose ScenarioRuns reference any of ``trace_paths``."""
+def _find_manifests_for_traces(trace_paths: list[Path]) -> list[RunManifest]:
+    """Return every manifest that references at least one of ``trace_paths``.
+
+    Walks ``.kensa/runs/`` newest-first. A manifest matches if any of its
+    ScenarioRuns (eval) or its ``trace_path`` (capture) resolves to a path
+    the caller asked about. Passing traces from different runs therefore
+    surfaces every source manifest rather than silently locking onto one.
+    """
     from kensa.paths import RUN_DIR
 
     if not RUN_DIR.is_dir():
-        return None
+        return []
     wanted = {p.resolve() for p in trace_paths}
+    matches: list[RunManifest] = []
     for manifest_file in sorted(RUN_DIR.glob("*.json"), reverse=True):
         try:
             manifest = RunManifest.model_validate_json(manifest_file.read_text())
         except (ValueError, OSError):
             continue
+        if manifest.kind == RunKind.CAPTURE:
+            if not manifest.trace_path:
+                continue
+            try:
+                if Path(manifest.trace_path).resolve() in wanted:
+                    matches.append(manifest)
+            except OSError:
+                continue
+            continue
         for runs in manifest.scenarios.values():
+            matched = False
             for sr in runs:
                 if not sr.trace_path:
                     continue
                 try:
                     if Path(sr.trace_path).resolve() in wanted:
-                        return manifest
+                        matches.append(manifest)
+                        matched = True
+                        break
                 except OSError:
                     continue
-    return None
+            if matched:
+                break
+    return matches
+
+
+def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
+    """Back-compat helper: return a unique matching manifest, else ``None``.
+
+    Used where only a single source manifest makes sense (e.g. the
+    verbatim-replay signal). Returns ``None`` when zero or multiple
+    distinct manifests match.
+    """
+    matches = _find_manifests_for_traces(trace_paths)
+    if len(matches) != 1:
+        return None
+    return matches[0]
 
 
 def collect_run_commands(
@@ -260,17 +384,51 @@ def collect_run_commands(
     manifest that references any of those traces.
     Returns ``[]`` when nothing can be resolved.
     """
-    ids: set[str] = _manifest_scenario_ids(run_id)
-    if not ids and trace_paths:
-        manifest = _find_manifest_for_traces(trace_paths)
-        if manifest:
-            ids = set(manifest.scenarios.keys())
-    if not ids:
+    manifests: list[RunManifest] = []
+    if run_id:
+        try:
+            manifests = [RunManifest.model_validate_json(manifest_path(run_id).read_text())]
+        except (FileNotFoundError, ValueError):
+            return []
+    elif trace_paths:
+        manifests = _find_manifests_for_traces(trace_paths)
+    else:
+        try:
+            manifests = [
+                RunManifest.model_validate_json(_resolve_generate_manifest(None).read_text())
+            ]
+        except (FileNotFoundError, ValueError):
+            return []
+    if not manifests:
         return []
 
-    id_map = _id_to_run_command(scenario_dir)
     unique: list[list[str]] = []
     seen: set[tuple[str, ...]] = set()
+
+    def _add(cmd: list[str]) -> None:
+        key = tuple(cmd)
+        if key not in seen:
+            seen.add(key)
+            unique.append(cmd)
+
+    eval_manifests: list[RunManifest] = []
+    for m in manifests:
+        if m.kind == RunKind.CAPTURE:
+            if m.command:
+                _add(list(m.command))
+        else:
+            eval_manifests.append(m)
+
+    if not eval_manifests:
+        return unique
+
+    ids: set[str] = set()
+    for m in eval_manifests:
+        ids.update(m.scenarios.keys())
+    if not ids:
+        return unique
+
+    id_map = _id_to_run_command(scenario_dir)
     for sid in ids:
         cmd = id_map.get(sid)
         if cmd is None:
@@ -423,8 +581,22 @@ def generate_from_traces(
     model: str | None = None,
     *,
     run_commands: list[list[str]] | None = None,
+    noinput_commands: list[list[str]] | None = None,
+    verbatim_replay: bool = False,
 ) -> list[Scenario]:
-    """Read traces, ask an LLM for scenarios, return validated Scenario objects."""
+    """Read traces, ask an LLM for scenarios, return validated Scenario objects.
+
+    Replay semantics are carried per recovered command via
+    ``noinput_commands``: any generated scenario whose ``run_command`` matches
+    an entry in that list gets ``scenario.input = None`` so the runner does
+    not double-append on replay. Captures made without ``-i`` qualify;
+    ``-i`` captures, eval runs, and user-supplied ``--run-command`` overrides
+    do not.
+
+    ``verbatim_replay`` is a coarse fallback for callers that haven't built
+    the per-command list (e.g. simple tests). When true, every scenario gets
+    ``input = None`` regardless of argv.
+    """
     from kensa.llm import get_completer
     from kensa.runner import read_trace
 
@@ -444,6 +616,9 @@ def generate_from_traces(
 
     single_run_command = run_commands[0] if run_commands and len(run_commands) == 1 else None
     allowlist = run_commands if run_commands and len(run_commands) > 1 else None
+    noinput_set: set[tuple[str, ...]] = (
+        {tuple(cmd) for cmd in noinput_commands} if noinput_commands else set()
+    )
 
     scenarios: list[Scenario] = []
     rejections: list[str] = []
@@ -455,6 +630,9 @@ def generate_from_traces(
         sd.setdefault("source", "traces")
         if single_run_command is not None:
             sd["run_command"] = list(single_run_command)
+        sc_cmd = sd.get("run_command")
+        if verbatim_replay or (isinstance(sc_cmd, list) and tuple(sc_cmd) in noinput_set):
+            sd["input"] = None
         try:
             candidate = Scenario.model_validate(sd)
             _validate_scenario_id(candidate.id)

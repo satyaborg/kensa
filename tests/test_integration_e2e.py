@@ -692,3 +692,175 @@ class TestChecksAgainstRealSpans:
 
         result = check_max_turns(spans, {"max": 5})
         assert result.passed, result.detail
+
+
+def _prepare_anthropic_provider() -> str:
+    """Skip unless Anthropic is ready; ensure routing picks it. Returns the agent body."""
+    _skip_unless_anthropic_ready()
+    os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+    os.environ.pop("OPENAI_API_KEY", None)
+    return _ANTHROPIC_SIMPLE_AGENT
+
+
+def _prepare_openai_provider() -> str:
+    """Skip unless OpenAI is ready; ensure routing picks it. Returns the agent body."""
+    _skip_unless_openai_ready()
+    os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
+    os.environ.pop("ANTHROPIC_API_KEY", None)
+    return _OPENAI_SIMPLE_AGENT
+
+
+_CAPTURE_PROVIDERS = [
+    pytest.param(_prepare_anthropic_provider, id="anthropic"),
+    pytest.param(_prepare_openai_provider, id="openai"),
+]
+
+
+@pytest.mark.integration
+class TestCaptureEndToEnd:
+    """Live capture → generate → run roundtrips, parametrized over Anthropic and OpenAI.
+
+    Pins the contract that:
+    - ``kensa capture -i "<str>"`` stores a clean reusable command and a trace
+      with real LLM spans; generated scenarios replay with ``scenario.input``
+      appended exactly once.
+    - ``kensa capture`` without ``-i`` preserves the full argv verbatim; the
+      generator emits ``scenario.input = None`` and the runner does NOT
+      double-append on replay. Locks in the fix for the blocker where
+      ``['python', 'agent.py', 'hello']`` was replaying as
+      ``['python', 'agent.py', 'hello', 'hello']``.
+    """
+
+    @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
+    def test_capture_with_input_writes_live_trace_and_clean_command(
+        self, tmp_path: Path, prepare_provider: object
+    ) -> None:
+        from click.testing import CliRunner
+
+        from kensa.cli import cli
+        from kensa.models import RunKind, RunManifest
+
+        agent_body = prepare_provider()  # type: ignore[operator]
+        agent = _write_agent(tmp_path, agent_body)
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                [
+                    "capture",
+                    "-i",
+                    "Reply with hello.",
+                    "--",
+                    "python",
+                    str(agent),
+                ],
+            )
+            assert result.exit_code == 0, result.output
+
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.kind == RunKind.CAPTURE
+            assert manifest.command == ["python", str(agent)]
+            assert manifest.captured_input == "Reply with hello."
+            assert manifest.trace_path is not None
+            spans = read_trace(manifest.trace_path)
+            assert [s for s in spans if s.kind == SpanKind.LLM], "no LLM spans in live capture"
+
+    @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
+    def test_capture_with_input_roundtrips_through_generate_and_run(
+        self, tmp_path: Path, prepare_provider: object
+    ) -> None:
+        """capture -i → generate (live LLM) → run generated scenario → spans."""
+        from click.testing import CliRunner
+
+        from kensa.cli import cli
+        from kensa.generate import generate_from_traces
+        from kensa.models import RunManifest
+
+        agent_body = prepare_provider()  # type: ignore[operator]
+        agent = _write_agent(tmp_path, agent_body)
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                ["capture", "-i", "Reply with hello only.", "--", "python", str(agent)],
+            )
+            assert result.exit_code == 0, result.output
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.trace_path is not None
+
+            scenarios = generate_from_traces(
+                [Path(manifest.trace_path)],
+                count=1,
+                run_commands=[list(manifest.command or [])],
+                verbatim_replay=False,
+            )
+            assert scenarios, "generator returned no scenarios from live capture"
+            generated = scenarios[0]
+            assert generated.run_command == ["python", str(agent)]
+            assert generated.input, "scenario.input must be populated when -i was used"
+
+            _, generated_run = run_scenario(generated, trace_dir=str(Path(".kensa/traces")))
+            assert generated_run.exit_code == 0, generated_run.stderr
+            replay_spans = read_trace(generated_run.trace_path)
+            assert [s for s in replay_spans if s.kind == SpanKind.LLM], (
+                "generated scenario produced no LLM spans on replay"
+            )
+
+    @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
+    def test_capture_without_input_roundtrips_as_verbatim_replay(
+        self, tmp_path: Path, prepare_provider: object
+    ) -> None:
+        """Pins the no-`-i` blocker fix: argv preserved, scenario.input empty, no double-append."""
+        from click.testing import CliRunner
+
+        from kensa.cli import cli
+        from kensa.generate import generate_from_traces, is_verbatim_replay_capture
+        from kensa.models import RunManifest
+
+        agent_body = prepare_provider()  # type: ignore[operator]
+        agent = _write_agent(tmp_path, agent_body)
+
+        runner = CliRunner()
+        with runner.isolated_filesystem(temp_dir=tmp_path):
+            result = runner.invoke(
+                cli,
+                ["capture", "--", "python", str(agent), "Reply with hello only."],
+            )
+            assert result.exit_code == 0, result.output
+
+            manifest_path = next(Path(".kensa/runs").glob("*.json"))
+            manifest = RunManifest.model_validate_json(manifest_path.read_text())
+            assert manifest.command == ["python", str(agent), "Reply with hello only."]
+            assert manifest.captured_input is None
+            assert manifest.trace_path is not None
+            assert manifest.command is not None
+
+            assert is_verbatim_replay_capture(manifest.run_id, None) is True
+
+            scenarios = generate_from_traces(
+                [Path(manifest.trace_path)],
+                count=1,
+                run_commands=[list(manifest.command)],
+                verbatim_replay=True,
+            )
+            assert scenarios, "generator returned no scenarios from verbatim-replay capture"
+            generated = scenarios[0]
+            assert generated.run_command == manifest.command, (
+                "verbatim replay must reuse the full captured argv"
+            )
+            assert generated.input in (None, ""), (
+                "verbatim replay must leave scenario.input empty so runner doesn't double-append"
+            )
+
+            _, generated_run = run_scenario(generated, trace_dir=str(Path(".kensa/traces")))
+            assert generated_run.exit_code == 0, (
+                f"verbatim-replay scenario failed to execute:\n{generated_run.stderr}"
+            )
+            replay_spans = read_trace(generated_run.trace_path)
+            assert [s for s in replay_spans if s.kind == SpanKind.LLM], (
+                "verbatim-replay scenario produced no LLM spans"
+            )
