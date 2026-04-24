@@ -426,7 +426,21 @@ class TestUnderproductionWarning:
         fake = _FakeCompleter(json.dumps({"scenarios": [good, bad]}))
         monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
 
-        with pytest.warns(UserWarning, match="only 1 passed validation"):
+        with pytest.warns(UserWarning, match="only 1 returned"):
+            scenarios = generate_from_traces([trace], count=2)
+        assert len(scenarios) == 1
+
+    def test_warns_on_clean_underproduction(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """If the LLM returns fewer valid scenarios than requested, warn even with no rejections."""
+        trace = tmp_path / "t.jsonl"
+        _write_trace(trace, [_make_span()])
+
+        fake = _FakeCompleter(json.dumps({"scenarios": [_valid_scenario_dict("only_one")]}))
+        monkeypatch.setattr("kensa.llm.get_completer", lambda model=None: fake)
+
+        with pytest.warns(UserWarning, match="fewer than requested"):
             scenarios = generate_from_traces([trace], count=2)
         assert len(scenarios) == 1
 

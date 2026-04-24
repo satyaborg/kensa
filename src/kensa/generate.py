@@ -493,13 +493,14 @@ def generate_from_traces(
             stacklevel=2,
         )
         scenarios = scenarios[:count]
-    elif len(scenarios) < count and rejections:
-        joined = "\n  - ".join(rejections)
-        warnings.warn(
-            f"Requested {count} scenarios but only {len(scenarios)} passed validation; "
-            f"{len(rejections)} rejected:\n  - {joined}",
-            stacklevel=2,
-        )
+    elif len(scenarios) < count:
+        msg = f"Requested {count} scenarios but only {len(scenarios)} returned"
+        if rejections:
+            joined = "\n  - ".join(rejections)
+            msg += f"; {len(rejections)} rejected:\n  - {joined}"
+        else:
+            msg += " (LLM returned fewer than requested; no rejections)"
+        warnings.warn(msg, stacklevel=2)
     return scenarios
 
 
