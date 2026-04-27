@@ -28,11 +28,10 @@
 ### Skills + CLI (recommended)
 
 ```bash
-npx skills add satyaborg/kensa
-uv add kensa
+uvx kensa init
 ```
 
-Works for Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and similar coding agents.
+Adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs skills into `.claude/skills/` and `.agents/skills/`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard. For CI: `uvx kensa init --cli --skills --blank`.
 
 ### Claude Code plugin
 

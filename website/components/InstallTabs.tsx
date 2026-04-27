@@ -13,38 +13,9 @@ const ICON_PROPS = {
   strokeLinejoin: "miter" as const,
 };
 
-interface InstallMethod {
-  key: string;
-  label: string;
-  prompt?: string;
-  lines: { comment?: string; cmd: string }[];
-  note: string;
-}
-
-const methods: InstallMethod[] = [
-  {
-    key: "skill",
-    label: "Skill",
-    lines: [{ cmd: "npx skills add satyaborg/kensa" }],
-    note: "Installs eval skills for coding agents. CLI auto-installs on first use.",
-  },
-  {
-    key: "cli",
-    label: "CLI",
-    lines: [{ cmd: "uv add kensa" }],
-    note: "Adds kensa as a project dependency (Python 3.10+)",
-  },
-  {
-    key: "plugin",
-    label: "Plugin",
-    prompt: "",
-    lines: [
-      { cmd: "/plugin marketplace add satyaborg/kensa" },
-      { cmd: "/plugin install kensa" },
-    ],
-    note: "Claude Code only. Same skills as npx, updated through the marketplace.",
-  },
-];
+const INSTALL_CMD = "uvx kensa init";
+const INSTALL_NOTE =
+  "Adds kensa CLI, scaffolds your project, and drops skills into whichever coding agent you use. Python 3.10+.";
 
 function CopyIcon({ copied }: { copied: boolean }) {
   return copied ? (
@@ -60,36 +31,16 @@ function CopyIcon({ copied }: { copied: boolean }) {
 }
 
 export function InstallTabs() {
-  const [active, setActive] = useState(0);
   const [copied, setCopied] = useState(false);
 
-  const method = methods[active];
-  const copyText = method.lines.map((l) => l.cmd).join("\n");
-
   const handleCopy = useCallback(async () => {
-    await navigator.clipboard.writeText(copyText);
+    await navigator.clipboard.writeText(INSTALL_CMD);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }, [copyText]);
+  }, []);
 
   return (
     <div className="a-install-tabs-wrapper">
-      <div className="a-install-tablist" role="tablist">
-        {methods.map((m, i) => (
-          <button
-            key={m.key}
-            role="tab"
-            className={`a-install-tab${i === active ? " a-install-tab--active" : ""}`}
-            aria-selected={i === active}
-            onClick={() => {
-              setActive(i);
-              setCopied(false);
-            }}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
       <div
         className="a-install-panel"
         role="button"
@@ -97,19 +48,10 @@ export function InstallTabs() {
         onClick={handleCopy}
       >
         <div className="a-install-lines">
-          {method.lines.map((line, i) => (
-            <div key={i}>
-              {line.comment && (
-                <div className="a-install-comment">{line.comment}</div>
-              )}
-              <div className="a-install-row">
-                {(method.prompt ?? "$") && (
-                  <span className="a-prompt">{method.prompt ?? "$"}</span>
-                )}
-                <code>{line.cmd}</code>
-              </div>
-            </div>
-          ))}
+          <div className="a-install-row">
+            <span className="a-prompt">$</span>
+            <code>{INSTALL_CMD}</code>
+          </div>
         </div>
         <span
           className={`a-copy${copied ? " a-copy-copied" : ""}`}
@@ -118,7 +60,7 @@ export function InstallTabs() {
           <CopyIcon copied={copied} />
         </span>
       </div>
-      <p className="a-install-note">{method.note}</p>
+      <p className="a-install-note">{INSTALL_NOTE}</p>
     </div>
   );
 }

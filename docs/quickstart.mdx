@@ -30,19 +30,18 @@ keywords:
 
 <Steps>
   <Step title="Install the skills and CLI">
-    `npx skills add` installs the eval workflow skills. `uv add kensa` or `pip install kensa` adds the runtime that the skills call underneath.
+    `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs the eval workflow skills into `.claude/skills/` and `.agents/skills/`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard.
 
-    <CodeGroup>
-    ```bash uv
-    npx skills add satyaborg/kensa
-    uv add kensa
+    ```bash
+    uvx kensa init
     ```
 
-    ```bash pip
-    npx skills add satyaborg/kensa
+    If you don't use uv, replace the dep-add step with `pip install kensa` and pass `--no-cli` to skip the prompt:
+
+    ```bash
+    uvx kensa init --no-cli
     pip install kensa
     ```
-    </CodeGroup>
 
     If you primarily use Claude Code, the plugin is an equivalent install path:
 
