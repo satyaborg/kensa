@@ -56,6 +56,7 @@ _COMMAND_ORDER = [
     "eval",
     "analyze",
     "mcp",
+    "skills",
 ]
 
 
@@ -89,6 +90,14 @@ def _validate_run_id(run_id: str) -> str:
     if not _SAFE_RUN_ID.match(run_id):
         raise click.BadParameter(f"Invalid run ID: {run_id!r}")
     return run_id
+
+
+def _running_in_project_venv() -> bool:
+    """True when the active interpreter lives in the CWD's .venv/."""
+    try:
+        return Path(sys.prefix).resolve() == (Path.cwd() / ".venv").resolve()
+    except OSError:
+        return False
 
 
 def _run_judge_manifest(
@@ -518,10 +527,28 @@ def analyze(trace_dir: str, fmt: str, output: str | None) -> None:
 @click.option(
     "--blank", is_flag=True, help="Scaffold directories only, skip example agent and scenario."
 )
-def init(force: bool, blank: bool) -> None:
+@click.option(
+    "--skills/--no-skills",
+    "install_skills_flag",
+    default=None,
+    help="Install skills into .claude/skills and .agents/skills (prompts in interactive mode).",
+)
+@click.option(
+    "--cli/--no-cli",
+    "install_cli_flag",
+    default=None,
+    help="Add kensa to project dev deps via uv add --dev (prompts in interactive mode).",
+)
+def init(
+    force: bool,
+    blank: bool,
+    install_skills_flag: bool | None,
+    install_cli_flag: bool | None,
+) -> None:
     """Set up .kensa/ dir with example agent."""
     from kensa.doctor import run_doctor
     from kensa.scaffold import init_kensa
+    from kensa.skills_install import ensure_cli_in_project, install_skills
 
     s = Steps()
     s.start("kensa init")
@@ -536,6 +563,40 @@ def init(force: bool, blank: bool) -> None:
         s.item(f"wrote {f}")
     if not blank and result.example_already_existed:
         s.item("example scenario ready (--force to regenerate)")
+
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+
+    should_install_cli = install_cli_flag
+    project_env_mutated = False
+    if should_install_cli is None and interactive:
+        should_install_cli = click.confirm(
+            "Add kensa to project dev deps (uv add --dev kensa)?",
+            default=True,
+        )
+    if should_install_cli:
+        cli_result = ensure_cli_in_project()
+        s.item(cli_result.detail, ok=cli_result.status == "added")
+        project_env_mutated = cli_result.status == "added"
+
+    should_install_skills = install_skills_flag
+    if should_install_skills is None and interactive:
+        should_install_skills = click.confirm(
+            "Install kensa skills for coding agents (.claude/skills + .agents/skills)?",
+            default=True,
+        )
+    if should_install_skills:
+        skills_result = install_skills(project=True, claude=True, codex=True, force=False)
+        for path in skills_result.written:
+            s.item(f"wrote {path}")
+        for path in skills_result.skipped:
+            s.item(f"skipped {path} (exists; run `kensa skills install --force` to overwrite)")
+
+    if project_env_mutated and not _running_in_project_venv():
+        s.line()
+        s.item(
+            "Environment checks below run in the current process, not your project venv. "
+            "For accurate results, run: uv run kensa doctor"
+        )
 
     checks = run_doctor()
     if blank:
@@ -759,6 +820,52 @@ def mcp(use_http: bool, host: str, port: int) -> None:
     if use_http:
         click.echo(f"kensa MCP server → http://{host}:{port}", err=True)
     run_server(transport=transport, host=host, port=port)
+
+
+@cli.group()
+def skills() -> None:
+    """Manage kensa skills for coding agents."""
+
+
+@skills.command("install")
+@click.option(
+    "--global",
+    "global_install",
+    is_flag=True,
+    help="Install to ~/.claude/skills and ~/.agents/skills (default: project-scoped).",
+)
+@click.option("--claude", "only_claude", is_flag=True, help="Only write to .claude/skills.")
+@click.option("--codex", "only_codex", is_flag=True, help="Only write to .agents/skills.")
+@click.option("--force", is_flag=True, help="Overwrite existing skill directories.")
+def skills_install(global_install: bool, only_claude: bool, only_codex: bool, force: bool) -> None:
+    """Install bundled skills into Claude Code and open-standard agent skill directories."""
+    from kensa.skills_install import install_skills
+
+    if only_claude and only_codex:
+        raise click.UsageError("--claude and --codex are mutually exclusive")
+    claude = not only_codex
+    codex = not only_claude
+
+    s = Steps()
+    scope = "global" if global_install else "project"
+    s.start(f"kensa skills install ({scope})")
+
+    result = install_skills(
+        project=not global_install,
+        claude=claude,
+        codex=codex,
+        force=force,
+    )
+
+    for path in result.written:
+        s.item(f"wrote {path}")
+    for path in result.skipped:
+        s.item(f"skipped {path} (exists; use --force)")
+    if not result.written and not result.skipped:
+        s.item("no skills bundled")
+
+    s.line()
+    s.end()
 
 
 if __name__ == "__main__":

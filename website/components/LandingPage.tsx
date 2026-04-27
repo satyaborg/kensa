@@ -163,15 +163,15 @@ export function LandingPage() {
               <span className="a-badge-tag">NEW</span>
               MCP server available
             </Link>
-            <h1 className="a-hero-title">Agent evals from zero to trusted.</h1>
+            <h1 className="a-hero-title">Zero to evals in minutes.</h1>
             <p className="a-hook">
-              Your coding agent drafts evals. You approve. Kensa instruments
-              and runs them.
+              Your coding agent drafts evals. You approve. Kensa instruments and
+              runs them.
             </p>
             <InstallTabs />
 
             <div className="a-logos-inline">
-              <span className="a-logos-label">Works with coding agents</span>
+              <span className="a-logos-label">Works with</span>
               <div className="a-logos-row">
                 {logos.map((l) => (
                   <span
@@ -185,10 +185,12 @@ export function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="a-hero-demo">
-            <LandingPageDemo />
-          </div>
+      <section className="a-demo-section">
+        <div className="a-demo-section-inner">
+          <LandingPageDemo />
         </div>
       </section>
 

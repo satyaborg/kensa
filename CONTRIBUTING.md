@@ -13,6 +13,8 @@ uv sync --extra dev
 pre-commit install
 ```
 
+> **Windows contributors:** the repo root contains a `skills` symlink → `src/kensa/skills` (canonical). Git on Windows needs `core.symlinks=true` and either Developer Mode or a non-admin shell with the `SeCreateSymbolicLinkPrivilege`. If `skills` checks out as a text file containing the target path, run `git config core.symlinks true && git checkout -- skills` after enabling symlink support.
+
 ## Development workflow
 
 1. Create a branch: `git checkout -b type/short-description`

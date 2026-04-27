@@ -18,7 +18,7 @@ const silkscreen = Silkscreen({
 });
 
 const SITE_URL = "https://kensa.sh";
-const SITE_TITLE = "Kensa | Agent evals from zero to trusted";
+const SITE_TITLE = "Kensa | Zero to evals in minutes";
 const SITE_DESCRIPTION =
   "Your coding agent drafts evals. You approve. Kensa instruments and runs them.";
 
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
         url: "/thumbnail.png",
         width: 1920,
         height: 1080,
-        alt: "Kensa | Agent evals from zero to trusted",
+        alt: "Kensa | Zero to evals in minutes",
       },
     ],
   },
