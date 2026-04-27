@@ -92,6 +92,14 @@ def _validate_run_id(run_id: str) -> str:
     return run_id
 
 
+def _running_in_project_venv() -> bool:
+    """True when the active interpreter lives in the CWD's .venv/."""
+    try:
+        return Path(sys.prefix).resolve() == (Path.cwd() / ".venv").resolve()
+    except OSError:
+        return False
+
+
 def _run_judge_manifest(
     manifest: RunManifest,
     judge_provider: JudgeProvider | None,
@@ -519,10 +527,28 @@ def analyze(trace_dir: str, fmt: str, output: str | None) -> None:
 @click.option(
     "--blank", is_flag=True, help="Scaffold directories only, skip example agent and scenario."
 )
-def init(force: bool, blank: bool) -> None:
+@click.option(
+    "--skills/--no-skills",
+    "install_skills_flag",
+    default=None,
+    help="Install skills into .claude/skills and .agents/skills (prompts in interactive mode).",
+)
+@click.option(
+    "--cli/--no-cli",
+    "install_cli_flag",
+    default=None,
+    help="Add kensa to project dev deps via uv add --dev (prompts in interactive mode).",
+)
+def init(
+    force: bool,
+    blank: bool,
+    install_skills_flag: bool | None,
+    install_cli_flag: bool | None,
+) -> None:
     """Set up .kensa/ dir with example agent."""
     from kensa.doctor import run_doctor
     from kensa.scaffold import init_kensa
+    from kensa.skills_install import ensure_cli_in_project, install_skills
 
     s = Steps()
     s.start("kensa init")
@@ -537,6 +563,40 @@ def init(force: bool, blank: bool) -> None:
         s.item(f"wrote {f}")
     if not blank and result.example_already_existed:
         s.item("example scenario ready (--force to regenerate)")
+
+    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+
+    should_install_cli = install_cli_flag
+    project_env_mutated = False
+    if should_install_cli is None and interactive:
+        should_install_cli = click.confirm(
+            "Add kensa to project dev deps (uv add --dev kensa)?",
+            default=True,
+        )
+    if should_install_cli:
+        cli_result = ensure_cli_in_project()
+        s.item(cli_result.detail, ok=cli_result.status == "added")
+        project_env_mutated = cli_result.status == "added"
+
+    should_install_skills = install_skills_flag
+    if should_install_skills is None and interactive:
+        should_install_skills = click.confirm(
+            "Install kensa skills for coding agents (.claude/skills + .agents/skills)?",
+            default=True,
+        )
+    if should_install_skills:
+        skills_result = install_skills(project=True, claude=True, codex=True, force=False)
+        for path in skills_result.written:
+            s.item(f"wrote {path}")
+        for path in skills_result.skipped:
+            s.item(f"skipped {path} (exists; run `kensa skills install --force` to overwrite)")
+
+    if project_env_mutated and not _running_in_project_venv():
+        s.line()
+        s.item(
+            "Environment checks below run in the current process, not your project venv. "
+            "For accurate results, run: uv run kensa doctor"
+        )
 
     checks = run_doctor()
     if blank:

@@ -136,6 +136,40 @@ def test_skills_install_cli_claude_codex_mutually_exclusive(tmp_path: Path, monk
     assert "mutually exclusive" in result.output
 
 
+def test_init_no_skills_flag_skips_install(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_init_skills_flag_installs(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--skills"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+
+
+def test_init_non_interactive_does_not_prompt(tmp_path: Path, monkeypatch) -> None:
+    """Without TTY and without --skills/--no-skills, init must not install or prompt."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank"], input="")
+    assert result.exit_code == 0, result.output
+    assert not (tmp_path / ".claude").exists()
+    assert not (tmp_path / ".agents").exists()
+
+
 def test_ensure_cli_in_project_no_pyproject(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     result = ensure_cli_in_project()
@@ -182,3 +216,102 @@ def test_ensure_cli_in_project_handles_uv_failure(tmp_path: Path, monkeypatch) -
         result = ensure_cli_in_project()
     assert result.status == "failed"
     assert "resolution failed" in result.detail
+
+
+def test_init_no_cli_flag_skips_uv_add(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    with patch("kensa.skills_install.subprocess.run") as mock_run:
+        result = runner.invoke(cli, ["init", "--blank", "--no-cli", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    mock_run.assert_not_called()
+
+
+def test_init_cli_flag_runs_uv_add(tmp_path: Path, monkeypatch) -> None:
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    with (
+        patch("kensa.skills_install.shutil.which", return_value="/usr/bin/uv"),
+        patch(
+            "kensa.skills_install.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ) as mock_run,
+    ):
+        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    mock_run.assert_called_once()
+
+
+def test_init_warns_when_project_env_mutated(tmp_path: Path, monkeypatch) -> None:
+    """After uv add succeeds, init must flag that doctor checks reflect the wrong env."""
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    with (
+        patch("kensa.skills_install.shutil.which", return_value="/usr/bin/uv"),
+        patch(
+            "kensa.skills_install.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ),
+    ):
+        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    assert "uv run kensa doctor" in result.output
+
+
+def test_init_does_not_warn_when_uv_add_skipped(tmp_path: Path, monkeypatch) -> None:
+    """No warning when no project env was mutated (no_pyproject path)."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    assert "uv run kensa doctor" not in result.output
+
+
+def test_init_does_not_warn_when_running_in_project_venv(tmp_path: Path, monkeypatch) -> None:
+    """If sys.prefix points at the CWD's .venv, doctor checks are accurate, no warning."""
+    import sys as real_sys
+
+    (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
+    project_venv = tmp_path / ".venv"
+    project_venv.mkdir()
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(real_sys, "prefix", str(project_venv))
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    with (
+        patch("kensa.skills_install.shutil.which", return_value="/usr/bin/uv"),
+        patch(
+            "kensa.skills_install.subprocess.run",
+            return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
+        ),
+    ):
+        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+    assert result.exit_code == 0, result.output
+    assert "uv run kensa doctor" not in result.output
+
+
+def test_init_force_does_not_overwrite_skills(tmp_path: Path, monkeypatch) -> None:
+    """init --force regenerates the example scenario but must NOT clobber installed skills."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+
+    runner.invoke(cli, ["init", "--blank", "--skills"])
+    user_edit = tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md"
+    user_edit.write_text("USER LOCAL EDIT")
+
+    result = runner.invoke(cli, ["init", "--blank", "--skills", "--force"])
+    assert result.exit_code == 0, result.output
+    assert user_edit.read_text() == "USER LOCAL EDIT", "init --force must not clobber skills"
