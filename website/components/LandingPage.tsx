@@ -185,10 +185,12 @@ export function LandingPage() {
               </div>
             </div>
           </div>
+        </div>
+      </section>
 
-          <div className="a-hero-demo">
-            <LandingPageDemo />
-          </div>
+      <section className="a-demo-section">
+        <div className="a-demo-section-inner">
+          <LandingPageDemo />
         </div>
       </section>
 
