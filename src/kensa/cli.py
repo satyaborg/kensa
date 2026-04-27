@@ -56,6 +56,7 @@ _COMMAND_ORDER = [
     "eval",
     "analyze",
     "mcp",
+    "skills",
 ]
 
 
@@ -759,6 +760,52 @@ def mcp(use_http: bool, host: str, port: int) -> None:
     if use_http:
         click.echo(f"kensa MCP server → http://{host}:{port}", err=True)
     run_server(transport=transport, host=host, port=port)
+
+
+@cli.group()
+def skills() -> None:
+    """Manage kensa skills for coding agents."""
+
+
+@skills.command("install")
+@click.option(
+    "--global",
+    "global_install",
+    is_flag=True,
+    help="Install to ~/.claude/skills and ~/.agents/skills (default: project-scoped).",
+)
+@click.option("--claude", "only_claude", is_flag=True, help="Only write to .claude/skills.")
+@click.option("--codex", "only_codex", is_flag=True, help="Only write to .agents/skills.")
+@click.option("--force", is_flag=True, help="Overwrite existing skill directories.")
+def skills_install(global_install: bool, only_claude: bool, only_codex: bool, force: bool) -> None:
+    """Install bundled skills into Claude Code and open-standard agent skill directories."""
+    from kensa.skills_install import install_skills
+
+    if only_claude and only_codex:
+        raise click.UsageError("--claude and --codex are mutually exclusive")
+    claude = not only_codex
+    codex = not only_claude
+
+    s = Steps()
+    scope = "global" if global_install else "project"
+    s.start(f"kensa skills install ({scope})")
+
+    result = install_skills(
+        project=not global_install,
+        claude=claude,
+        codex=codex,
+        force=force,
+    )
+
+    for path in result.written:
+        s.item(f"wrote {path}")
+    for path in result.skipped:
+        s.item(f"skipped {path} (exists; use --force)")
+    if not result.written and not result.skipped:
+        s.item("no skills bundled")
+
+    s.line()
+    s.end()
 
 
 if __name__ == "__main__":
