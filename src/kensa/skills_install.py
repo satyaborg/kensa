@@ -52,13 +52,7 @@ def install_skills(
     force: bool = False,
     src: Path | None = None,
 ) -> InstallResult:
-    """Copy bundled skills into the requested target directories.
-
-    Project-scoped writes to CWD; global writes to ``$HOME``. Both Claude Code
-    (``.claude/skills``) and the open Agent Skills standard (``.agents/skills``)
-    are written by default so the same skill files are picked up by Claude Code,
-    Codex, OpenCode, Cursor, and any other adopter.
-    """
+    """Copy bundled skills into .claude/skills and/or .agents/skills."""
     if not (claude or codex):
         raise ValueError("at least one of claude or codex must be enabled")
 
@@ -88,12 +82,7 @@ def install_skills(
 
 
 def ensure_cli_in_project() -> CliInstallResult:
-    """Add kensa to the project's dev deps via ``uv add --dev kensa`` if pyproject.toml is present.
-
-    kensa is an eval harness, not a runtime dependency, so it lands in the dev
-    group (PEP 735). ``uv add`` is idempotent, so we don't pre-check whether
-    kensa is already a dependency. Returns a structured result.
-    """
+    """Run ``uv add --dev kensa`` if pyproject.toml is present and uv is on PATH."""
     pyproject = Path.cwd() / "pyproject.toml"
     if not pyproject.exists():
         return CliInstallResult(
