@@ -26,11 +26,20 @@ import json
 import random
 import sys
 from pathlib import Path
+from typing import TypedDict
 
 import yaml
 
 from kensa.judge import get_judge, load_judge_prompt_spec
 from kensa.models import JudgePromptSpec, ResultStatus
+
+
+class ValidationRow(TypedDict):
+    output: str
+    human: str
+    judge: str
+    correct: bool
+    reasoning: str
 
 
 def build_validation_prompt(spec: JudgePromptSpec, output: str) -> str:
@@ -84,7 +93,7 @@ def load_labels(path: Path) -> list[dict[str, str]]:
 
 
 def bootstrap_corrected_pass_rate(
-    results: list[dict[str, object]],
+    results: list[ValidationRow],
     n_bootstrap: int = 1000,
     seed: int = 42,
 ) -> dict[str, float | None]:
@@ -179,7 +188,7 @@ def main() -> None:
 
     # Run validation
     tp = fp = tn = fn = 0
-    results: list[dict[str, object]] = []
+    results: list[ValidationRow] = []
 
     for i, example in enumerate(labels):
         output = example["output"]
