@@ -30,13 +30,19 @@ keywords:
 
 <Steps>
   <Step title="Install the skills and CLI">
-    `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs the eval workflow skills into `.claude/skills/` and `.agents/skills/`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard.
+    `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard.
 
     ```bash
     uvx kensa init
     ```
 
-    If you don't use uv, replace the dep-add step with `pip install kensa` and pass `--no-cli` to skip the prompt:
+    In non-interactive environments, pass the coding agent explicitly:
+
+    ```bash
+    uvx kensa init -a all --blank
+    ```
+
+    If you don't use uv, replace the dep-add step with `pip install kensa` and pass `--no-cli` to skip mutating `pyproject.toml`:
 
     ```bash
     uvx kensa init --no-cli

@@ -20,7 +20,11 @@ Scaffold `.kensa/` with an example scenario and agent.
 kensa init           # create .kensa/ with example files
 kensa init --force   # overwrite the existing example
 kensa init --blank   # scaffold directories only, skip the example
+kensa init -a codex
+kensa init -a all --blank
 ```
+
+In an interactive terminal, `kensa init` prompts for the coding agent to install skills for, defaulting from existing project markers or `all` in a fresh repo. In non-interactive environments, pass `-a/--agent claude|codex|cursor|opencode|gemini|other|all|none`.
 
 Detects your API keys and scaffolds accordingly:
 - `ANTHROPIC_API_KEY` set → Anthropic agent using `claude-haiku-4-5`

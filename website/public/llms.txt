@@ -4,7 +4,7 @@ The open source agent evals harness. Tell your coding agent to "evaluate my agen
 
 ## Install
 
-- Skills + CLI (recommended): `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs skills into `.claude/skills/` and `.agents/skills/`. Non-interactive: `uvx kensa init --cli --skills --blank`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI.
+- Skills + CLI (recommended): `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Non-interactive: `uvx kensa init --cli -a all --blank`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI.
 - Claude Code plugin: `/plugin marketplace add satyaborg/kensa` then `/plugin install kensa`
 
 Provider extras: `uv add "kensa[anthropic]"`, `uv add "kensa[openai]"`, `uv add "kensa[langchain]"`, `uv add "kensa[all]"`
