@@ -11,7 +11,7 @@ import pytest
 import yaml
 from click.testing import CliRunner
 
-from kensa.cli import cli
+from kensa.cli import _detect_agent_default, cli
 from kensa.models import (
     Analysis,
     Distribution,
@@ -1132,3 +1132,37 @@ class TestCliInit:
         with runner.isolated_filesystem(temp_dir=tmp_path):
             result = runner.invoke(cli, ["init"])
             assert "checks passed" in result.output
+
+
+class TestDetectAgentDefault:
+    def test_both_skills_dirs_present(self, tmp_path: Path) -> None:
+        (tmp_path / ".claude" / "skills").mkdir(parents=True)
+        (tmp_path / ".agents" / "skills").mkdir(parents=True)
+        assert _detect_agent_default(tmp_path) == "all"
+
+    def test_only_claude_skills_dir(self, tmp_path: Path) -> None:
+        (tmp_path / ".claude" / "skills").mkdir(parents=True)
+        assert _detect_agent_default(tmp_path) == "claude"
+
+    def test_only_agents_skills_dir(self, tmp_path: Path) -> None:
+        (tmp_path / ".agents" / "skills").mkdir(parents=True)
+        assert _detect_agent_default(tmp_path) == "codex"
+
+    def test_falls_back_to_claude_dir_marker(self, tmp_path: Path) -> None:
+        (tmp_path / ".claude").mkdir()
+        assert _detect_agent_default(tmp_path) == "claude"
+
+    def test_falls_back_to_claude_md_marker(self, tmp_path: Path) -> None:
+        (tmp_path / "CLAUDE.md").write_text("# Claude")
+        assert _detect_agent_default(tmp_path) == "claude"
+
+    def test_falls_back_to_agents_dir_marker(self, tmp_path: Path) -> None:
+        (tmp_path / ".agents").mkdir()
+        assert _detect_agent_default(tmp_path) == "codex"
+
+    def test_falls_back_to_agents_md_marker(self, tmp_path: Path) -> None:
+        (tmp_path / "AGENTS.md").write_text("# Agents")
+        assert _detect_agent_default(tmp_path) == "codex"
+
+    def test_empty_dir_defaults_to_all(self, tmp_path: Path) -> None:
+        assert _detect_agent_default(tmp_path) == "all"

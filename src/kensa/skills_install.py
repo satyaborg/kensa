@@ -35,11 +35,11 @@ def discover_skills(src: Path | None = None) -> list[Path]:
     return sorted(d for d in root.iterdir() if d.is_dir() and (d / "SKILL.md").is_file())
 
 
-def target_dirs(base: Path, claude: bool, codex: bool) -> list[Path]:
+def target_dirs(base: Path, claude: bool, agents: bool) -> list[Path]:
     targets: list[Path] = []
     if claude:
         targets.append(base / ".claude" / "skills")
-    if codex:
+    if agents:
         targets.append(base / ".agents" / "skills")
     return targets
 
@@ -48,17 +48,17 @@ def install_skills(
     *,
     project: bool = True,
     claude: bool = True,
-    codex: bool = True,
+    agents: bool = True,
     force: bool = False,
     src: Path | None = None,
 ) -> InstallResult:
     """Copy bundled skills into .claude/skills and/or .agents/skills."""
-    if not (claude or codex):
-        raise ValueError("at least one of claude or codex must be enabled")
+    if not (claude or agents):
+        raise ValueError("at least one of claude or agents must be enabled")
 
     base = Path.cwd() if project else Path.home()
     skills = discover_skills(src)
-    targets = target_dirs(base, claude=claude, codex=codex)
+    targets = target_dirs(base, claude=claude, agents=agents)
 
     written: list[str] = []
     skipped: list[str] = []
