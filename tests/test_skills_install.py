@@ -42,28 +42,28 @@ def test_discover_skills_skips_top_level_files(tmp_path: Path) -> None:
 
 def test_target_dirs_default_writes_both() -> None:
     base = Path("/tmp/x")
-    assert target_dirs(base, claude=True, codex=True) == [
+    assert target_dirs(base, claude=True, agents=True) == [
         base / ".claude" / "skills",
         base / ".agents" / "skills",
     ]
 
 
 def test_target_dirs_claude_only() -> None:
-    assert target_dirs(Path("/x"), claude=True, codex=False) == [Path("/x/.claude/skills")]
+    assert target_dirs(Path("/x"), claude=True, agents=False) == [Path("/x/.claude/skills")]
 
 
-def test_target_dirs_codex_only() -> None:
-    assert target_dirs(Path("/x"), claude=False, codex=True) == [Path("/x/.agents/skills")]
+def test_target_dirs_agents_only() -> None:
+    assert target_dirs(Path("/x"), claude=False, agents=True) == [Path("/x/.agents/skills")]
 
 
 def test_install_skills_requires_at_least_one_target() -> None:
     with pytest.raises(ValueError, match="at least one"):
-        install_skills(claude=False, codex=False)
+        install_skills(claude=False, agents=False)
 
 
 def test_install_skills_project_writes_both_paths(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    result = install_skills(project=True, claude=True, codex=True)
+    result = install_skills(project=True, claude=True, agents=True)
     assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
     assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
     assert any(".claude/skills" in p for p in result.targets)
@@ -74,38 +74,38 @@ def test_install_skills_project_writes_both_paths(tmp_path: Path, monkeypatch) -
 
 def test_install_skills_global_writes_to_home(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setenv("HOME", str(tmp_path))
-    install_skills(project=False, claude=True, codex=True)
+    install_skills(project=False, claude=True, agents=True)
     assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
     assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
 
 
 def test_install_skills_skips_existing_without_force(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    install_skills(project=True, claude=True, codex=False)
-    second = install_skills(project=True, claude=True, codex=False)
+    install_skills(project=True, claude=True, agents=False)
+    second = install_skills(project=True, claude=True, agents=False)
     assert second.skipped
     assert not second.written
 
 
 def test_install_skills_force_overwrites(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    install_skills(project=True, claude=True, codex=False)
+    install_skills(project=True, claude=True, agents=False)
     target = tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md"
     target.write_text("STALE")
-    install_skills(project=True, claude=True, codex=False, force=True)
+    install_skills(project=True, claude=True, agents=False, force=True)
     assert target.read_text() != "STALE"
 
 
 def test_install_skills_claude_only_skips_agents(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    install_skills(project=True, claude=True, codex=False)
+    install_skills(project=True, claude=True, agents=False)
     assert (tmp_path / ".claude" / "skills").is_dir()
     assert not (tmp_path / ".agents").exists()
 
 
-def test_install_skills_codex_only_skips_claude(tmp_path: Path, monkeypatch) -> None:
+def test_install_skills_agents_only_skips_claude(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
-    install_skills(project=True, claude=False, codex=True)
+    install_skills(project=True, claude=False, agents=True)
     assert (tmp_path / ".agents" / "skills").is_dir()
     assert not (tmp_path / ".claude").exists()
 
@@ -128,38 +128,109 @@ def test_skills_install_cli_global(tmp_path: Path, monkeypatch) -> None:
     assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
 
 
-def test_skills_install_cli_claude_codex_mutually_exclusive(tmp_path: Path, monkeypatch) -> None:
+def test_skills_install_cli_agent_claude_writes_only_claude(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     runner = CliRunner()
-    result = runner.invoke(cli, ["skills", "install", "--claude", "--codex"])
+    result = runner.invoke(cli, ["skills", "install", "--agent", "claude"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_skills_install_cli_agent_codex_writes_agent_skills(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills", "install", "--agent", "codex"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_skills_install_cli_agent_short_flag(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills", "install", "-a", "claude"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_skills_install_cli_agent_none_is_invalid(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["skills", "install", "--agent", "none"])
     assert result.exit_code != 0
-    assert "mutually exclusive" in result.output
+    assert "Invalid value" in result.output
 
 
-def test_init_no_skills_flag_skips_install(tmp_path: Path, monkeypatch) -> None:
+def test_init_agent_none_skips_install(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
-    result = runner.invoke(cli, ["init", "--blank", "--no-skills"])
+    result = runner.invoke(cli, ["init", "--blank", "--agent", "none"])
     assert result.exit_code == 0, result.output
     assert not (tmp_path / ".claude").exists()
     assert not (tmp_path / ".agents").exists()
 
 
-def test_init_skills_flag_installs(tmp_path: Path, monkeypatch) -> None:
+def test_init_agent_claude_writes_only_claude_dir(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
-    result = runner.invoke(cli, ["init", "--blank", "--skills"])
+    result = runner.invoke(cli, ["init", "--blank", "--agent", "claude"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".agents").exists()
+
+
+def test_init_agent_short_flag(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "-a", "codex"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_init_agent_codex_writes_only_agent_skills_dir(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--agent", "codex"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_init_agent_cursor_writes_only_agent_skills_dir(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--agent", "cursor"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert not (tmp_path / ".claude").exists()
+
+
+def test_init_agent_all_writes_both(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+    result = runner.invoke(cli, ["init", "--blank", "--agent", "all"])
     assert result.exit_code == 0, result.output
     assert (tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md").is_file()
     assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
 
 
 def test_init_non_interactive_does_not_prompt(tmp_path: Path, monkeypatch) -> None:
-    """Without TTY and without --skills/--no-skills, init must not install or prompt."""
+    """Without TTY and without --agent, init must default to 'none' (no skills, no prompt)."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
@@ -168,6 +239,41 @@ def test_init_non_interactive_does_not_prompt(tmp_path: Path, monkeypatch) -> No
     assert result.exit_code == 0, result.output
     assert not (tmp_path / ".claude").exists()
     assert not (tmp_path / ".agents").exists()
+
+
+def test_init_picker_prompts_with_detected_default(tmp_path: Path, monkeypatch) -> None:
+    """In interactive mode, picker shows with default from _detect_agent_default."""
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "CLAUDE.md").write_text("# Claude")
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    runner = CliRunner()
+    with (
+        patch("kensa.cli._is_interactive", return_value=True),
+        patch("kensa.cli.click.prompt", return_value="claude") as mock_prompt,
+    ):
+        result = runner.invoke(cli, ["init", "--blank", "--no-cli"])
+    assert result.exit_code == 0, result.output
+    mock_prompt.assert_called_once()
+    assert mock_prompt.call_args.kwargs["default"] == "claude"
+
+
+def test_init_idempotent_rerun_adds_missing_dir(tmp_path: Path, monkeypatch) -> None:
+    """Re-running init with a different agent choice adds the missing dir without clobbering."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    runner = CliRunner()
+
+    runner.invoke(cli, ["init", "--blank", "--no-cli", "--agent", "claude"])
+    user_edit = tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md"
+    user_edit.write_text("USER LOCAL EDIT")
+
+    result = runner.invoke(cli, ["init", "--blank", "--no-cli", "--agent", "all"])
+    assert result.exit_code == 0, result.output
+    assert (tmp_path / ".agents" / "skills" / "audit-evals" / "SKILL.md").is_file()
+    assert user_edit.read_text() == "USER LOCAL EDIT", "re-run must not clobber existing skills"
 
 
 def test_ensure_cli_in_project_no_pyproject(tmp_path: Path, monkeypatch) -> None:
@@ -224,12 +330,13 @@ def test_init_no_cli_flag_skips_uv_add(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
     with patch("kensa.skills_install.subprocess.run") as mock_run:
-        result = runner.invoke(cli, ["init", "--blank", "--no-cli", "--no-skills"])
+        result = runner.invoke(cli, ["init", "--blank", "--no-cli", "--agent", "none"])
     assert result.exit_code == 0, result.output
     mock_run.assert_not_called()
 
 
-def test_init_cli_flag_runs_uv_add(tmp_path: Path, monkeypatch) -> None:
+def test_init_default_runs_uv_add_without_prompting(tmp_path: Path, monkeypatch) -> None:
+    """Without --cli/--no-cli, init must install kensa silently (no confirm prompt)."""
     (tmp_path / "pyproject.toml").write_text("[project]\nname='x'\nversion='0'\n")
     monkeypatch.chdir(tmp_path)
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
@@ -241,10 +348,12 @@ def test_init_cli_flag_runs_uv_add(tmp_path: Path, monkeypatch) -> None:
             "kensa.skills_install.subprocess.run",
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
         ) as mock_run,
+        patch("kensa.cli.click.confirm") as mock_confirm,
     ):
-        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+        result = runner.invoke(cli, ["init", "--blank", "--agent", "none"])
     assert result.exit_code == 0, result.output
     mock_run.assert_called_once()
+    mock_confirm.assert_not_called()
 
 
 def test_init_warns_when_project_env_mutated(tmp_path: Path, monkeypatch) -> None:
@@ -261,7 +370,7 @@ def test_init_warns_when_project_env_mutated(tmp_path: Path, monkeypatch) -> Non
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
         ),
     ):
-        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+        result = runner.invoke(cli, ["init", "--blank", "--cli", "--agent", "none"])
     assert result.exit_code == 0, result.output
     assert "uv run kensa doctor" in result.output
 
@@ -272,7 +381,7 @@ def test_init_does_not_warn_when_uv_add_skipped(tmp_path: Path, monkeypatch) -> 
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
-    result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+    result = runner.invoke(cli, ["init", "--blank", "--cli", "--agent", "none"])
     assert result.exit_code == 0, result.output
     assert "uv run kensa doctor" not in result.output
 
@@ -296,7 +405,7 @@ def test_init_does_not_warn_when_running_in_project_venv(tmp_path: Path, monkeyp
             return_value=subprocess.CompletedProcess(args=[], returncode=0, stdout="", stderr=""),
         ),
     ):
-        result = runner.invoke(cli, ["init", "--blank", "--cli", "--no-skills"])
+        result = runner.invoke(cli, ["init", "--blank", "--cli", "--agent", "none"])
     assert result.exit_code == 0, result.output
     assert "uv run kensa doctor" not in result.output
 
@@ -308,10 +417,10 @@ def test_init_force_does_not_overwrite_skills(tmp_path: Path, monkeypatch) -> No
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     runner = CliRunner()
 
-    runner.invoke(cli, ["init", "--blank", "--skills"])
+    runner.invoke(cli, ["init", "--blank", "--no-cli", "--agent", "all"])
     user_edit = tmp_path / ".claude" / "skills" / "audit-evals" / "SKILL.md"
     user_edit.write_text("USER LOCAL EDIT")
 
-    result = runner.invoke(cli, ["init", "--blank", "--skills", "--force"])
+    result = runner.invoke(cli, ["init", "--blank", "--no-cli", "--agent", "all", "--force"])
     assert result.exit_code == 0, result.output
     assert user_edit.read_text() == "USER LOCAL EDIT", "init --force must not clobber skills"

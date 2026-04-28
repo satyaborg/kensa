@@ -100,6 +100,38 @@ def _running_in_project_venv() -> bool:
         return False
 
 
+def _is_interactive() -> bool:
+    return sys.stdin.isatty() and sys.stdout.isatty()
+
+
+def _detect_agent_default(base: Path) -> str:
+    """Pick the picker default by inspecting existing agent dirs and project markers."""
+    claude_skills = (base / ".claude" / "skills").is_dir()
+    agents_skills = (base / ".agents" / "skills").is_dir()
+    if claude_skills and agents_skills:
+        return "all"
+    if claude_skills:
+        return "claude"
+    if agents_skills:
+        return "codex"
+    if (base / ".claude").is_dir() or (base / "CLAUDE.md").is_file():
+        return "claude"
+    if (base / ".agents").is_dir() or (base / "AGENTS.md").is_file():
+        return "codex"
+    return "all"
+
+
+def _agent_install_targets(agent_choice: str) -> tuple[bool, bool]:
+    """Return (claude_target, agents_target) for a user-facing coding agent choice."""
+    if agent_choice == "none":
+        return False, False
+    if agent_choice == "claude":
+        return True, False
+    if agent_choice == "all":
+        return True, True
+    return False, True
+
+
 def _run_judge_manifest(
     manifest: RunManifest,
     judge_provider: JudgeProvider | None,
@@ -522,27 +554,33 @@ def analyze(trace_dir: str, fmt: str, output: str | None) -> None:
         sys.exit(1)
 
 
+AGENT_CHOICES = ["claude", "codex", "cursor", "opencode", "gemini", "other", "all", "none"]
+INSTALL_AGENT_CHOICES = [c for c in AGENT_CHOICES if c != "none"]
+
+
 @cli.command()
 @click.option("--force", is_flag=True, help="Overwrite existing example scenario.")
 @click.option(
     "--blank", is_flag=True, help="Scaffold directories only, skip example agent and scenario."
 )
 @click.option(
-    "--skills/--no-skills",
-    "install_skills_flag",
+    "-a",
+    "--agent",
+    "agent_choice",
+    type=click.Choice(AGENT_CHOICES),
     default=None,
-    help="Install skills into .claude/skills and .agents/skills (prompts in interactive mode).",
+    help="Coding agent to install skills for. Prompts in interactive mode.",
 )
 @click.option(
     "--cli/--no-cli",
     "install_cli_flag",
     default=None,
-    help="Add kensa to project dev deps via uv add --dev (prompts in interactive mode).",
+    help="Add kensa to project dev deps via uv add --dev (default: install).",
 )
 def init(
     force: bool,
     blank: bool,
-    install_skills_flag: bool | None,
+    agent_choice: str | None,
     install_cli_flag: bool | None,
 ) -> None:
     """Set up .kensa/ dir with example agent."""
@@ -564,28 +602,35 @@ def init(
     if not blank and result.example_already_existed:
         s.item("example scenario ready (--force to regenerate)")
 
-    interactive = sys.stdin.isatty() and sys.stdout.isatty()
+    interactive = _is_interactive()
 
-    should_install_cli = install_cli_flag
+    should_install_cli = True if install_cli_flag is None else install_cli_flag
     project_env_mutated = False
-    if should_install_cli is None and interactive:
-        should_install_cli = click.confirm(
-            "Add kensa to project dev deps (uv add --dev kensa)?",
-            default=True,
-        )
     if should_install_cli:
         cli_result = ensure_cli_in_project()
         s.item(cli_result.detail, ok=cli_result.status == "added")
         project_env_mutated = cli_result.status == "added"
 
-    should_install_skills = install_skills_flag
-    if should_install_skills is None and interactive:
-        should_install_skills = click.confirm(
-            "Install kensa skills for coding agents (.claude/skills + .agents/skills)?",
-            default=True,
+    if agent_choice is None:
+        if interactive:
+            default_agent = _detect_agent_default(Path.cwd())
+            agent_choice = click.prompt(
+                "Install skills for which coding agent?",
+                type=click.Choice(AGENT_CHOICES),
+                default=default_agent,
+                show_choices=True,
+            )
+        else:
+            agent_choice = "none"
+
+    claude_target, agents_target = _agent_install_targets(agent_choice)
+    if claude_target or agents_target:
+        skills_result = install_skills(
+            project=True,
+            claude=claude_target,
+            agents=agents_target,
+            force=False,
         )
-    if should_install_skills:
-        skills_result = install_skills(project=True, claude=True, codex=True, force=False)
         for path in skills_result.written:
             s.item(f"wrote {path}")
         for path in skills_result.skipped:
@@ -834,17 +879,21 @@ def skills() -> None:
     is_flag=True,
     help="Install to ~/.claude/skills and ~/.agents/skills (default: project-scoped).",
 )
-@click.option("--claude", "only_claude", is_flag=True, help="Only write to .claude/skills.")
-@click.option("--codex", "only_codex", is_flag=True, help="Only write to .agents/skills.")
+@click.option(
+    "-a",
+    "--agent",
+    "agent_choice",
+    type=click.Choice(INSTALL_AGENT_CHOICES),
+    default="all",
+    show_default=True,
+    help="Coding agent to install skills for.",
+)
 @click.option("--force", is_flag=True, help="Overwrite existing skill directories.")
-def skills_install(global_install: bool, only_claude: bool, only_codex: bool, force: bool) -> None:
+def skills_install(global_install: bool, agent_choice: str, force: bool) -> None:
     """Install bundled skills into Claude Code and open-standard agent skill directories."""
     from kensa.skills_install import install_skills
 
-    if only_claude and only_codex:
-        raise click.UsageError("--claude and --codex are mutually exclusive")
-    claude = not only_codex
-    codex = not only_claude
+    claude, agents = _agent_install_targets(agent_choice)
 
     s = Steps()
     scope = "global" if global_install else "project"
@@ -853,7 +902,7 @@ def skills_install(global_install: bool, only_claude: bool, only_codex: bool, fo
     result = install_skills(
         project=not global_install,
         claude=claude,
-        codex=codex,
+        agents=agents,
         force=force,
     )
 

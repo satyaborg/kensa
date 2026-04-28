@@ -31,7 +31,7 @@
 uvx kensa init
 ```
 
-Adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs skills into `.claude/skills/` and `.agents/skills/`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard. For CI: `uvx kensa init --cli --skills --blank`.
+Adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard. For CI: `uvx kensa init --cli -a all --blank`.
 
 ### Claude Code plugin
 

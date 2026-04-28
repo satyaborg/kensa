@@ -23,7 +23,18 @@ uvx kensa init
 /plugin install kensa
 ```
 
-`uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and installs skills into `.claude/skills/` and `.agents/skills/`. Use `kensa skills install` later to refresh after a kensa upgrade.
+`uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Use `kensa skills install` later to refresh after a kensa upgrade.
+
+```bash
+kensa skills install -a claude
+kensa skills install -a codex
+kensa skills install -a cursor
+kensa skills install -a opencode
+kensa skills install -a gemini
+kensa skills install -a all
+```
+
+Claude Code uses `.claude/skills`. Codex, Cursor, OpenCode, Gemini CLI, and `other` use the open Agent Skills directory at `.agents/skills`.
 
 ## Lifecycle
 
