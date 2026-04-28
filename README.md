@@ -4,7 +4,7 @@
 <img src="https://raw.githubusercontent.com/satyaborg/kensa/main/assets/banner.png" alt="kensa - the open source agent evals harness" width="800">
 <br><br>
 
-<p>Tell your coding agent to evaluate an agent. Get a working eval suite in minutes.</p>
+<p>Kensa is the open source harness for evaluating agents.</p>
 
 <p>
 <a href="https://github.com/satyaborg/kensa/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/satyaborg/kensa/ci.yml?label=CI&style=flat-square" alt="CI"></a>
@@ -12,57 +12,68 @@
 <a href="https://www.python.org/downloads/"><img src="https://img.shields.io/python/required-version-toml?tomlFilePath=https%3A%2F%2Fraw.githubusercontent.com%2Fsatyaborg%2Fkensa%2Fmain%2Fpyproject.toml&style=flat-square" alt="Python"></a>
 <a href="LICENSE"><img src="https://img.shields.io/github/license/satyaborg/kensa?style=flat-square" alt="License"></a>
 <a href="https://pepy.tech/projects/kensa"><img src="https://img.shields.io/pepy/dt/kensa?style=flat-square" alt="Downloads"></a>
-<a href="https://github.com/satyaborg/kensa/stargazers"><img src="https://img.shields.io/github/stars/satyaborg/kensa?style=flat-square" alt="Stars"></a>
 </p>
 
 </div>
 
 ---
 
-`kensa` is an open source eval harness for agent codebases. It gives coding agents an opinionated CLI and bundled skills to generate scenarios, run them in subprocesses, judge results, and report failures.
+Agents are non-deterministic. Prompts drift. Tools change. Models behave differently.
+Any change can make them slower, more expensive, or just plain unreliable.
 
-> **Note:** kensa is under active development. Things may shift between minor versions as the harness stabilizes. Pin your version if you need predictability. If something breaks, [open an issue](https://github.com/satyaborg/kensa/issues). Your feedback shapes evals.
+`kensa` gives coding agents, like Claude Code, a repeatable loop to eval your
+agents, and catch regressions every time you make a change.
 
 ## Installation
 
-### Skills + CLI (recommended)
+### Paste this into your coding agent
+
+Open your coding agent and paste:
+
+```text
+Install Kensa for agent-driven evals with `uvx kensa init --cli --agent all`,
+then evaluate this agent using Kensa's skills. Start with audit-evals, let it
+route to the right next step, and follow the eval lifecycle: generate scenarios,
+calibrate judges if needed, run `kensa eval`, diagnose failures, and recommend
+whether to fix the agent, the scenarios, or the judge.
+```
+
+Your agent does the setup, writes or updates evals, runs them, and reports what
+to fix.
+
+### Or run it yourself
 
 ```bash
 uvx kensa init
 ```
 
-Adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the open Agent Skills standard. For CI: `uvx kensa init --cli -a all --blank`.
-
-### Claude Code plugin
-
-If you primarily use Claude Code, you can install it as a plugin:
-
-```text
-/plugin marketplace add satyaborg/kensa
-/plugin install kensa
-```
+Adds `kensa` to your dev deps, scaffolds `.kensa/`, and adds 5 skills for the
+complete evals workflow. Works with Claude Code, Codex, Cursor, and other coding
+agents. For non-interactive setup or CI: `uvx kensa init --cli --agent all --blank`.
 
 ## Quickstart
 
-Tell your coding agent:
+Tell your coding agent what you want:
 
-```text
-evaluate this agent
-```
+| You say | Kensa does |
+| --- | --- |
+| "Evaluate this agent" | Audit setup, create or reuse scenarios, and run evals. |
+| "Why are evals failing?" | Inspect results and traces, then diagnose the root cause. |
+| "Add coverage for tool use" | Write scenario YAML with tool or trajectory checks. |
+| "The judge seems wrong" | Create or validate structured judge prompts. |
 
-That gives you the basic loop:
+## How it works
 
-- your coding agent inspects the repo, sets up instrumentation and writes evals
-- it runs `kensa` to execute scenarios and capture traces
-- deterministic checks run first
-- the LLM judge only runs when those pass
-- reports show what failed and why
-- you review changes, approve fixes and iterate
+- **Zero to eval:** your coding agent drafts scenarios; you review them.
+- **Runs become traces:** each scenario runs in a subprocess with LLM calls, tool
+  use, tokens, cost, and latency captured.
+- **Checks gate judges:** deterministic checks run before any LLM judge call.
+- **Ship with evidence:** reports show verdicts, traces, cost, latency, and failure details.
 
 ## Instrumentation
 
 Zero code changes. kensa captures LLM calls, tool use, tokens, cost, and latency
-without modifying your agent.
+without modifying your agent. OpenTelemetry (OTel) compatible.
 
 <details>
 <summary>Provider extras</summary>
@@ -85,14 +96,11 @@ uv add "kensa[all]"
 | `kensa generate` | Synthesize scenario YAMLs from captured traces via an LLM |
 | `kensa eval` | Run + judge + report in one command |
 | `kensa report` | Show the latest results in terminal, Markdown, JSON, or HTML |
-| `kensa analyze` | Flag slow, expensive, anomalous, or error-prone traces |
-| `kensa mcp` | Serve kensa over MCP for LLM clients (stdio or HTTP) |
+
+See the [CLI docs](https://kensa.sh/docs/cli) for `run`, `judge`, `analyze`,
+`mcp`, and the full command reference.
 
 ## MCP server
-
-Kensa ships an MCP server that exposes the eval workflow to any MCP-aware
-client: Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop,
-anything that speaks MCP.
 
 One-liner for Claude Code (run from your project root):
 
@@ -100,77 +108,30 @@ One-liner for Claude Code (run from your project root):
 claude mcp add kensa -- uvx kensa-mcp
 ```
 
-`uvx` pulls [`kensa-mcp`](https://pypi.org/project/kensa-mcp/) from PyPI into
-an isolated environment on first launch. No pre-install needed. The server
-reads `.kensa/` relative to the cwd it inherits from Claude Code.
-
-**Tools (7):** `init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`.
-
-**Resources (8):** read-only data under the `kensa://` namespace.
-
-```
-kensa://runs                          # list of recent runs
-kensa://runs/{id}                     # manifest + summary for one run
-kensa://runs/{id}/results             # full judged results
-kensa://runs/{id}/trace/{scenario}/{index}  # spans for one scenario execution
-kensa://scenarios                     # list of scenarios
-kensa://scenarios/{id}                # full scenario YAML
-kensa://judges                        # list of judge prompt names
-kensa://judges/{name}                 # judge prompt spec
-```
-
-Long-running tools (`run`, `judge`, `eval`) return a compact summary plus
-a `results_uri`. Fetch detail via the resource only when you need it.
-Errors come back as a typed `MCPError` envelope (`{error, code, hint}`) with
-stable `code` values so clients can branch on failure type.
-
-<details>
-<summary>Manual config (Cursor, Codex, Claude Desktop, etc.)</summary>
-
-Add to your MCP client config (e.g. `~/.claude.json` or a project-local `.mcp.json`):
+For other JSON-based MCP clients, add to your project's `.mcp.json` or
+`.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
     "kensa": {
       "command": "uvx",
-      "args": ["kensa-mcp"],
-      "cwd": "/absolute/path/to/your/project"
+      "args": ["kensa-mcp"]
     }
   }
 }
 ```
 
-Already have kensa installed in the project? Add the extra (`uv add "kensa[mcp]"`)
-and use the built-in `kensa mcp` subcommand instead of the shim:
+For Codex, add to your project-scoped `.codex/config.toml`:
 
-```json
-{
-  "mcpServers": {
-    "kensa": {
-      "command": "uv",
-      "args": ["run", "kensa", "mcp"],
-      "cwd": "/absolute/path/to/your/project"
-    }
-  }
-}
+```toml
+[mcp_servers.kensa]
+command = "uvx"
+args = ["kensa-mcp"]
 ```
 
-For local Kensa development from a source checkout:
-
-```json
-{
-  "mcpServers": {
-    "kensa": {
-      "command": "uv",
-      "args": ["run", "--extra", "mcp", "kensa", "mcp"],
-      "cwd": "/absolute/path/to/kensa"
-    }
-  }
-}
-```
-
-</details>
+See the [MCP server docs](https://kensa.sh/docs/mcp-server) for tools,
+resources, and manual config.
 
 ## Manual workflow
 
@@ -203,21 +164,9 @@ criteria: |
 ```
 
 For complete examples, see [`examples/`](examples/).
-
-`trajectory` is the deterministic path check for tool-call correctness. V1 supports:
-
-- `ordering: exact | any_order`
-- `args: exact | ignore`
-- `min_accuracy`
-- inline budgets: `max_steps`, `max_tokens`, `max_duration_seconds`
-
-When present, reports surface `trajectory_accuracy` and `step_efficiency` alongside pass/fail.
-
-When you run the same scenario multiple times, aggregate reports also surface estimated 3-run
-and 5-run pass rates assuming independent runs.
-
-If you need custom deterministic assertions beyond the built-ins, add a Python check via
-`CHECK_REGISTRY` rather than embedding logic in scenario YAML.
+See the [scenario docs](https://kensa.sh/docs/scenarios) and
+[checks docs](https://kensa.sh/docs/checks) for the full field and check
+reference.
 
 ## CI
 
@@ -226,7 +175,8 @@ If you need custom deterministic assertions beyond the built-ins, add a Python c
   run: uv run kensa eval --format markdown
 ```
 
-If you only use deterministic checks, you do not need API keys. If you use `criteria` or `judge`, add judge provider secrets in CI.
+If you only use deterministic checks, you do not need API keys. If you use
+`criteria` or `judge`, add judge LLM provider secrets in CI.
 
 ## Need more?
 
@@ -234,5 +184,7 @@ If you only use deterministic checks, you do not need API keys. If you use `crit
 - [`examples/`](examples/) has sample agents and scenarios
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) covers local development
 - [Homepage](https://kensa.sh)
-- [Issues](https://github.com/satyaborg/kensa/issues)
+
+## License
+
 - [MIT License](LICENSE)
