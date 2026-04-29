@@ -129,6 +129,26 @@ def _write_manifest(
     return path
 
 
+def _write_capture_manifest(run_id: str) -> Path:
+    from kensa.models import RunKind
+
+    run_dir = Path(".kensa/runs")
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest = RunManifest(
+        run_id=run_id,
+        timestamp=datetime(2026, 3, 1, tzinfo=timezone.utc),
+        kind=RunKind.CAPTURE,
+        command=["python", "agent.py"],
+        trace_path=".kensa/traces/cap.jsonl",
+        exit_code=0,
+        duration_seconds=0.5,
+        span_count=1,
+    )
+    path = run_dir / f"{run_id}.json"
+    path.write_text(manifest.model_dump_json())
+    return path
+
+
 class TestSurface:
     def test_seven_tools(self) -> None:
         tools = asyncio.run(mcp.list_tools())
@@ -175,11 +195,13 @@ class TestHelpers:
 
 
 class TestInit:
-    def test_blank_creates_dirs_only(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_default_creates_dirs_only(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
         monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
         monkeypatch.delenv("OPENAI_API_KEY", raising=False)
         with _isolated(tmp_path):
-            out = init(blank=True)
+            out = init()
             assert Path(".kensa/scenarios").is_dir()
             assert not Path(".kensa/scenarios/example.yaml").exists()
         assert not isinstance(out, MCPError)
@@ -194,7 +216,7 @@ class TestInit:
             out = init()
         assert not isinstance(out, MCPError)
         assert out.directories_created == []
-        assert out.example_already_existed is True
+        assert out.example_already_existed is False
 
 
 class TestDoctor:
@@ -330,6 +352,24 @@ class TestJudge:
         assert out.run_id == "20260301T000000"
         assert out.results_uri == "kensa://runs/20260301T000000/results"
 
+    def test_capture_run_returns_run_not_evalable(self, tmp_path: Path) -> None:
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000010")
+            out = asyncio.run(judge(run_id="20260301T000010"))
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_evalable"
+        assert not Path(".kensa/results/20260301T000010.json").exists()
+
+    def test_capture_only_workspace_hint_points_to_generate(self, tmp_path: Path) -> None:
+        """Bare judge() in a capture-only workspace must send clients to generate(), not run()."""
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000011")
+            out = asyncio.run(judge())
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_found"
+        assert out.hint is not None
+        assert "generate" in out.hint
+
     def test_malformed_yaml_returns_scenario_invalid(self, tmp_path: Path) -> None:
         """A malformed scenario YAML referenced by the manifest must surface as
         a typed MCPError(scenario_invalid), not bubble out as a generic error."""
@@ -449,6 +489,23 @@ class TestReport:
         assert isinstance(out, MCPError)
         assert out.code == "run_not_found"
 
+    def test_capture_run_returns_run_not_evalable(self, tmp_path: Path) -> None:
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000020")
+            out = report(run_id="20260301T000020")
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_evalable"
+
+    def test_capture_only_workspace_hint_points_to_generate(self, tmp_path: Path) -> None:
+        """Bare report() in a capture-only workspace must hint generate(), not judge()/eval()."""
+        with _isolated(tmp_path):
+            _write_capture_manifest("20260301T000021")
+            out = report()
+        assert isinstance(out, MCPError)
+        assert out.code == "run_not_found"
+        assert out.hint is not None
+        assert "generate" in out.hint
+
     def test_renders(self, tmp_path: Path) -> None:
         with _isolated(tmp_path):
             results_dir = Path(".kensa/results")
@@ -483,6 +540,26 @@ class TestRunsResource:
             out = runs_list()
         assert len(out) == 1
         assert out[0].run_id == "r1"
+
+    def test_captures_filtered_before_cap(self, tmp_path: Path) -> None:
+        """Capture manifests must not consume the 50-eval budget.
+
+        Newest 60 files are captures, older 3 are evals. Pre-fix, all 50
+        returned entries would be squeezed out by captures. Post-fix, the
+        older evals still surface.
+        """
+        with _isolated(tmp_path):
+            for i in range(60):
+                _write_capture_manifest(f"c{i:03d}")
+            # Evals with older-sorting ids ("a*") must still surface.
+            _write_manifest("a_old_1")
+            _write_manifest("a_old_2")
+            _write_manifest("a_old_3")
+
+            out = runs_list()
+
+        ids = {r.run_id for r in out}
+        assert ids == {"a_old_1", "a_old_2", "a_old_3"}
 
 
 class TestRunDetailResource:

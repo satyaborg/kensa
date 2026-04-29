@@ -26,8 +26,10 @@ ruff format --check src/ tests/                           # CI format check (no 
 uv run ty check
 
 # CLI
-kensa init                                               # scaffold .kensa/ with example scenario
-kensa init --blank                                       # scaffold .kensa/ without examples
+kensa init                                               # scaffold .kensa/ (bare; no example)
+kensa init --example                                     # scaffold .kensa/ with a demo agent + scenario
+kensa capture -- <cmd> [args...]                         # capture one real agent invocation as a trace
+kensa capture -i "<input>" -- <cmd> [args...]            # capture with an explicit input string (recommended)
 kensa doctor                                             # pre-flight environment checks
 kensa run                                                # run all scenarios
 kensa run --scenario-id <name>                           # run specific scenario
@@ -82,6 +84,7 @@ aggregate.py       ← models only (multi-run variance/flaky detection)
 analyzer.py        ← models + runner + trace_semantics + utils
 judge.py           ← models + checks + utils + paths (lazy: runner, llm)
 runner.py          ← models + paths + translate
+capture.py         ← models + paths + runner (kensa capture: subprocess + trace + capture manifest)
 doctor.py          ← paths + utils (lazy: runner, styles)
 exporter.py        ← stdlib + opentelemetry only (JSONL span exporter, no kensa imports)
 scaffold.py        ← paths only (idempotent .kensa/ scaffolding, shared by CLI and MCP)
@@ -89,7 +92,7 @@ llm.py             ← stdlib only (Completer protocol + Anthropic/OpenAI adapte
 generate.py        ← models + paths (lazy: runner, utils, llm; scenario synthesis from traces)
 mcp_server.py      ← models + paths (lazy: runner, judge, report, analyzer, doctor, scaffold)
 _mcp_launcher.py   ← stdlib only (clean install-hint wrapper around mcp_server.main; consumed by the kensa-mcp shim package)
-cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server, generate)
+cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server, generate, capture)
 ```
 
 No circular deps. `models.py` is imported by everything. `utils.py` is the most shared utility (checks, judge, analyzer, doctor).
