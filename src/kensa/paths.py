@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
+
+
+class CaptureOnlyWorkspaceError(FileNotFoundError):
+    """Raised when the only runs on disk are captures; callers hint ``kensa generate``."""
+
 
 ROOT = Path(".kensa")
 SCENARIO_DIR = ROOT / "scenarios"
@@ -38,13 +44,42 @@ def latest_report_link() -> Path:
 
 
 def latest_manifest() -> Path:
-    """Return the path to the most recent run manifest.
-
-    Raises FileNotFoundError if no manifests exist.
-    """
+    """Return the most recent eval manifest, or raise CaptureOnlyWorkspaceError if only captures."""
     if not RUN_DIR.exists():
         raise FileNotFoundError("No runs found. Run `kensa run` first.")
-    manifests = sorted(RUN_DIR.glob("*.json"))
+    manifests = sorted(RUN_DIR.glob("*.json"), reverse=True)
     if not manifests:
         raise FileNotFoundError("No run manifests found. Run `kensa run` first.")
-    return manifests[-1]
+    saw_capture = False
+    for path in manifests:
+        try:
+            kind = json.loads(path.read_text()).get("kind", "eval")
+        except (OSError, ValueError, TypeError):
+            continue
+        if kind == "eval":
+            return path
+        if kind == "capture":
+            saw_capture = True
+    if saw_capture:
+        raise CaptureOnlyWorkspaceError(
+            "No eval runs yet. Found capture run(s); turn them into scenarios with "
+            "`kensa generate`, then `kensa run`."
+        )
+    raise FileNotFoundError("No run manifests found. Run `kensa run` first.")
+
+
+def latest_capture_manifest() -> Path:
+    """Return the path to the most recent capture manifest."""
+    if not RUN_DIR.exists():
+        raise FileNotFoundError("No runs found. Run `kensa capture` first.")
+    manifests = sorted(RUN_DIR.glob("*.json"), reverse=True)
+    if not manifests:
+        raise FileNotFoundError("No capture manifests found. Run `kensa capture` first.")
+    for path in manifests:
+        try:
+            kind = json.loads(path.read_text()).get("kind", "eval")
+        except (OSError, ValueError, TypeError):
+            continue
+        if kind == "capture":
+            return path
+    raise FileNotFoundError("No capture manifests found. Run `kensa capture` first.")

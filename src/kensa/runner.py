@@ -15,7 +15,7 @@ from typing import Any
 
 import yaml
 
-from kensa.models import RunManifest, Scenario, ScenarioRun, Span
+from kensa.models import RunKind, RunManifest, Scenario, ScenarioRun, Span
 from kensa.paths import RUN_DIR, SCENARIO_DIR, TRACE_DIR
 from kensa.translate import oi_to_kensa
 
@@ -176,17 +176,13 @@ elif "PYTHONPATH" in _os.environ:
 """
 
 
-def _write_sitecustomize(tmp_dir: str) -> None:
+def write_sitecustomize(tmp_dir: str) -> None:
     """Write the bootstrap sitecustomize.py into *tmp_dir*."""
     Path(tmp_dir, "sitecustomize.py").write_text(_SITECUSTOMIZE_BODY)
 
 
-def _build_pythonpath(tmp_dir: str, env: dict[str, str]) -> str:
-    """Build PYTHONPATH that activates sitecustomize.
-
-    Prepends *tmp_dir* (for sitecustomize.py) to the existing PYTHONPATH
-    from *env* (which already includes .env merges and scenario overrides).
-    """
+def build_pythonpath(tmp_dir: str, env: dict[str, str]) -> str:
+    """Prepend *tmp_dir* to PYTHONPATH so sitecustomize.py is loaded first."""
     parts = [tmp_dir]
     existing = env.get("PYTHONPATH", "")
     if existing:
@@ -194,7 +190,7 @@ def _build_pythonpath(tmp_dir: str, env: dict[str, str]) -> str:
     return os.pathsep.join(parts)
 
 
-def _warn_existing_sitecustomize() -> None:
+def warn_existing_sitecustomize() -> None:
     """Warn if the user's environment already has a sitecustomize.py we'll shadow."""
     import importlib.util
 
@@ -208,7 +204,7 @@ def _warn_existing_sitecustomize() -> None:
         )
 
 
-def _read_spans(trace_dir: Path) -> list[Span]:
+def read_spans(trace_dir: Path) -> list[Span]:
     """Read OI spans from a trace directory and translate to kensa format."""
     spans: list[Span] = []
     spans_file = trace_dir / "spans.jsonl"
@@ -225,7 +221,7 @@ def _read_spans(trace_dir: Path) -> list[Span]:
     return spans
 
 
-def _write_trace(spans: list[Span], output_path: Path) -> None:
+def write_trace(spans: list[Span], output_path: Path) -> None:
     """Write kensa spans as JSONL."""
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "w") as f:
@@ -263,8 +259,8 @@ def run_scenario(
         env.update(safe_overrides)
         env["KENSA_TRACE_DIR"] = tmp_dir
 
-        _write_sitecustomize(tmp_dir)
-        env["PYTHONPATH"] = _build_pythonpath(tmp_dir, env)
+        write_sitecustomize(tmp_dir)
+        env["PYTHONPATH"] = build_pythonpath(tmp_dir, env)
 
         effective_input = input_override if input_override is not None else scenario.input
         argv = _build_command(scenario.run_command, effective_input)
@@ -291,7 +287,7 @@ def run_scenario(
             stderr_output = str(exc.stderr or "")
         duration = time.monotonic() - start
 
-        spans = _read_spans(Path(tmp_dir))
+        spans = read_spans(Path(tmp_dir))
 
     if not spans:
         if timed_out:
@@ -312,7 +308,7 @@ def run_scenario(
                 msg += f"\nstderr:\n{stderr_output.strip()[-500:]}"
         raise RuntimeError(msg)
 
-    _write_trace(spans, trace_path)
+    write_trace(spans, trace_path)
 
     return scenario.id, ScenarioRun(
         trace_path=str(trace_path),
@@ -357,13 +353,13 @@ def run_scenarios(
     on_progress: Callable[[int, int, str], None] | None = None,
 ) -> RunManifest:
     """Run all scenarios (or filtered subset) and return a manifest."""
-    _warn_existing_sitecustomize()
+    warn_existing_sitecustomize()
     if scenarios is None:
         scenarios = load_scenarios(scenario_dir, scenario_ids)
     timestamp = datetime.now(tz=timezone.utc)
     run_id = timestamp.strftime("%Y%m%dT%H%M%S%f")[:18]
 
-    manifest = RunManifest(run_id=run_id, timestamp=timestamp)
+    manifest = RunManifest(run_id=run_id, timestamp=timestamp, kind=RunKind.EVAL)
     total = len(scenarios)
 
     for idx, scenario in enumerate(scenarios, 1):
@@ -395,7 +391,7 @@ def run_scenarios(
     RUN_DIR.mkdir(parents=True, exist_ok=True)
     manifest_file = RUN_DIR / f"{run_id}.json"
     with open(manifest_file, "w") as f:
-        f.write(manifest.model_dump_json(indent=2))
+        f.write(manifest.model_dump_json(indent=2, exclude_none=True))
 
     return manifest
 
