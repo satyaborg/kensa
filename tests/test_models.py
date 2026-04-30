@@ -18,6 +18,7 @@ from kensa.models import (
     JudgePromptSpec,
     Result,
     ResultStatus,
+    RunKind,
     RunManifest,
     Scenario,
     ScenarioRun,
@@ -414,28 +415,8 @@ class TestRunManifest:
         assert len(restored.scenarios["smoke_test"]) == 1
         assert restored.scenarios["smoke_test"][0].exit_code == 0
 
-    def test_migration_single_to_list(self) -> None:
-        """Old format (single ScenarioRun dict) auto-migrates to list."""
-        old_data = {
-            "run_id": "20260317T143000",
-            "timestamp": "2026-03-17T14:30:00+00:00",
-            "scenarios": {
-                "test_1": {
-                    "trace_path": "t/test.jsonl",
-                    "exit_code": 0,
-                    "duration_seconds": 1.0,
-                    "stdout": "",
-                    "stderr": "",
-                },
-            },
-        }
-        manifest = RunManifest.model_validate(old_data)
-        assert isinstance(manifest.scenarios["test_1"], list)
-        assert len(manifest.scenarios["test_1"]) == 1
-        assert manifest.scenarios["test_1"][0].exit_code == 0
-
-    def test_migration_already_list(self) -> None:
-        """Already-migrated format (list) is left unchanged."""
+    def test_multiple_runs_per_scenario(self) -> None:
+        """Multiple ScenarioRun entries per scenario id round-trip cleanly."""
         data = {
             "run_id": "20260317T143000",
             "timestamp": "2026-03-17T14:30:00+00:00",
@@ -448,6 +429,36 @@ class TestRunManifest:
         }
         manifest = RunManifest.model_validate(data)
         assert len(manifest.scenarios["test_1"]) == 2
+
+    def test_missing_kind_defaults_to_eval(self) -> None:
+        manifest = RunManifest.model_validate(
+            {
+                "run_id": "20260317T143000",
+                "timestamp": "2026-03-17T14:30:00+00:00",
+                "scenarios": {},
+            }
+        )
+        assert manifest.kind == RunKind.EVAL
+
+    def test_capture_manifest_round_trip(self) -> None:
+        manifest = RunManifest(
+            run_id="20260317T143001",
+            timestamp=datetime(2026, 3, 17, 14, 30, 1, tzinfo=timezone.utc),
+            kind=RunKind.CAPTURE,
+            command=["python", "agent.py", "hello"],
+            trace_path=".kensa/traces/20260317T143001.jsonl",
+            exit_code=0,
+            duration_seconds=1.5,
+            stdout="ok",
+            stderr="",
+            span_count=3,
+        )
+
+        restored = RunManifest.model_validate_json(manifest.model_dump_json())
+        assert restored.kind == RunKind.CAPTURE
+        assert restored.command == ["python", "agent.py", "hello"]
+        assert restored.trace_path == ".kensa/traces/20260317T143001.jsonl"
+        assert restored.span_count == 3
 
 
 class TestScenarioJudgeValidation:
