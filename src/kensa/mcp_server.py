@@ -270,7 +270,19 @@ def init(
     example: bool = False,
     blank: bool | None = None,
 ) -> InitResponse | MCPError:
-    """Scaffold ``.kensa/`` (idempotent); pass ``example=True`` for a demo agent + scenario."""
+    """Scaffold ``.kensa/`` (idempotent).
+
+    Creates ``scenarios/``, ``traces/``, ``judges/``, ``agents/``. When
+    ``example`` is true, writes a demo agent and scenario chosen from the
+    available API keys. ``force`` overwrites an existing example.
+
+    Behavior change: as of the capture-command release, the no-arg
+    ``init()`` call scaffolds the directory empty instead of writing the
+    example. Pass ``example=True`` to restore the previous behavior.
+    ``blank`` is accepted as an inverse alias for callers pinned to the
+    pre-capture signature (``blank=True`` suppresses ``example``) but does
+    not flip the new default.
+    """
     from kensa.scaffold import init_kensa
 
     include_example = example and blank is not True
@@ -286,7 +298,13 @@ _SOFT_CHECK_MARKERS: tuple[str, ...] = ("API_KEY",)
 
 @mcp.tool
 def doctor() -> DoctorResponse:
-    """Run pre-flight diagnostics (Python, SDKs, API keys, scenarios, judge)."""
+    """Run pre-flight diagnostics (Python, SDKs, API keys, scenarios, judge).
+
+    Returns the complete checklist plus a ``ready`` flag. Never fails; a
+    misconfigured environment is reported via individual check entries.
+    Readiness mirrors the CLI: non-key failures block readiness, while missing
+    provider-specific API keys do not, only the *absence of any* API key does.
+    """
     from kensa.doctor import run_doctor
 
     raw = run_doctor()
@@ -311,7 +329,11 @@ async def run(
     timeout: int = 300,
     ctx: Context | None = None,
 ) -> RunSummary | MCPError:
-    """Execute scenarios in subprocesses and capture OpenTelemetry traces."""
+    """Execute scenarios in subprocesses and capture OpenTelemetry traces.
+
+    Writes a RunManifest under ``.kensa/runs/<run_id>.json``. Returns a
+    summary plus ``manifest_uri`` for full detail.
+    """
     from kensa.runner import ScenarioNotFoundError, run_scenarios
 
     loop = asyncio.get_running_loop()
@@ -365,7 +387,11 @@ async def judge(
     scenario_dir: str = str(SCENARIO_DIR),
     ctx: Context | None = None,
 ) -> JudgeSummary | MCPError:
-    """Score a run with deterministic checks plus the LLM judge."""
+    """Score a run with deterministic checks plus the LLM judge.
+
+    Defaults to the latest run. Writes results to
+    ``.kensa/results/<run_id>.json``. Returns a summary plus ``results_uri``.
+    """
     from kensa.judge import get_judge, judge_manifest, manifest_requires_judge
 
     if run_id is not None and not _validate_run_id(run_id):
@@ -453,7 +479,11 @@ async def eval(
     model: str | None = None,
     ctx: Context | None = None,
 ) -> EvalSummary | MCPError:
-    """Run scenarios and judge them in one call."""
+    """Run scenarios and judge them in one call (the 90% workflow).
+
+    Resolves the judge up-front so expensive runs don't happen without a
+    working judge. Writes manifest, results, and an HTML report.
+    """
     from kensa.judge import get_judge, judge_manifest
     from kensa.runner import ScenarioNotFoundError, load_scenarios, run_scenarios
 
@@ -540,7 +570,11 @@ def report(
     run_id: str | None = None,
     format: Literal["terminal", "markdown", "json", "html"] = "markdown",
 ) -> ReportResponse | MCPError:
-    """Render a run's results in the requested format (latest by default)."""
+    """Render a run's results (latest by default) in the requested format.
+
+    Also writes the HTML artefact under ``.kensa/reports/<run_id>.html`` as a
+    side effect, matching the CLI's behaviour.
+    """
     from kensa.report import FORMATTERS
 
     if run_id is not None and not _validate_run_id(run_id):
@@ -586,7 +620,11 @@ def report(
 
 @mcp.tool
 def analyze(trace_dir: str = str(TRACE_DIR)) -> Analysis:
-    """Compute cost, latency, and anomaly statistics across all traces."""
+    """Compute cost / latency / anomaly statistics across all traces.
+
+    Reads every JSONL under ``trace_dir`` and surfaces per-tool usage,
+    outlier traces, and error rates.
+    """
     from kensa.analyzer import analyze_traces
 
     return analyze_traces(trace_dir=trace_dir)
@@ -594,7 +632,12 @@ def analyze(trace_dir: str = str(TRACE_DIR)) -> Analysis:
 
 @mcp.resource("kensa://runs")
 def runs_list() -> list[RunListItem]:
-    """List the most recent eval runs (newest first, up to 50; captures filtered before cap)."""
+    """List the most recent eval runs (newest first, up to 50).
+
+    Capture manifests are filtered out *before* the 50-item cap so a
+    workspace full of recent captures does not push eval history off the
+    window.
+    """
     if not RUN_DIR.exists():
         return []
     out: list[RunListItem] = []
@@ -673,7 +716,13 @@ def run_results(run_id: str) -> list[Result]:
 
 @mcp.resource("kensa://runs/{run_id}/trace/{scenario}/{index}")
 def run_trace(run_id: str, scenario: str, index: str) -> list[Span]:
-    """Spans for one scenario run; ``index`` is the 0-based per-scenario run-list position."""
+    """Spans for a single run of a scenario inside a run.
+
+    ``index`` is the 0-based position in the manifest's per-scenario run list.
+    Dataset-backed scenarios produce one entry per row, so iterate indices to
+    access every trace. ``len(manifest.scenarios[scenario])`` (exposed via the
+    ``kensa://runs/{run_id}`` resource) gives the valid range.
+    """
     from kensa.runner import read_trace
 
     if not _validate_run_id(run_id) or not _validate_run_id(scenario):
@@ -775,7 +824,12 @@ def run_server(
     host: str = "127.0.0.1",
     port: int = 8765,
 ) -> None:
-    """Launch the MCP server; http binds 127.0.0.1 with no auth, do not expose publicly."""
+    """Launch the MCP server.
+
+    HTTP transport binds to ``127.0.0.1`` by default. Exposing it on a public
+    interface exposes subprocess-executing tools (``run``, ``eval``) with no
+    auth; do not do this on a shared host without a bearer token in front.
+    """
     if transport == "stdio":
         mcp.run()
     elif transport == "http":
