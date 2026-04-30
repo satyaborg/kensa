@@ -57,10 +57,7 @@ def _find_dotenv() -> Path | None:
 
 
 def load_dotenv() -> dict[str, str]:
-    """Load KEY=VALUE pairs from the nearest .env file (walks up from cwd).
-
-    Skips comments and blank lines. Strips surrounding quotes from values.
-    """
+    """Load KEY=VALUE pairs from nearest .env (walks up cwd); strips quotes, skips comments."""
     env_path = _find_dotenv()
     if env_path is None:
         return {}
@@ -97,10 +94,7 @@ def load_scenario(path: Path) -> Scenario:
 
 
 def load_dataset(scenario_dir: Path, filename: str) -> list[dict[str, Any]]:
-    """Read a JSONL dataset file from the scenario directory.
-
-    Each line is a JSON object. Blank lines are skipped.
-    """
+    """Read a JSONL dataset file from the scenario directory; blank lines skipped."""
     path = (scenario_dir / filename).resolve()
     if not path.is_relative_to(scenario_dir.resolve()):
         raise ValueError(f"Dataset path escapes scenario directory: {filename}")
@@ -140,13 +134,7 @@ def load_scenarios(
 
 
 def _build_command(command: list[str], input_value: str | dict[str, Any] | None) -> list[str]:
-    """Build the subprocess argv from a list-form ``run_command`` and input.
-
-    The input is appended as the final argv element when provided. Dict inputs
-    are JSON-serialized. No shell, no parsing, no template substitution: every
-    element of ``command`` is passed verbatim to ``subprocess.run``, so shell
-    metacharacters in the input cannot be interpreted.
-    """
+    """Build subprocess argv (verbatim, no shell): input appended last; dicts JSON-serialized."""
     if not command:
         raise ValueError("run_command must be a non-empty list of argv elements")
     if input_value is None:
@@ -240,13 +228,7 @@ def run_scenario(
     timeout: int = DEFAULT_TIMEOUT,
     input_override: str | dict[str, Any] | None = None,
 ) -> tuple[str, ScenarioRun]:
-    """Execute a single scenario.
-
-    Returns (scenario_id, ScenarioRun) with trace path and metadata.
-    Distinguishes three failure modes: subprocess crash, timeout, and no spans.
-    When *input_override* is provided it replaces ``scenario.input`` for this
-    execution (used by dataset expansion).
-    """
+    """Execute one scenario; ``input_override`` replaces ``scenario.input``."""
     trace_filename = _trace_filename(scenario.id)
     trace_path = Path(trace_dir) / trace_filename
 

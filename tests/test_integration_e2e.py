@@ -1,10 +1,4 @@
-"""End-to-end integration tests against real LLM APIs.
-
-Skips cleanly when API keys or instrumentor packages are missing. Skip with
-``pytest -m "not integration"``. Model overrides via ``KENSA_TEST_ANTHROPIC_MODEL``,
-``KENSA_TEST_OPENAI_MODEL``, ``KENSA_TEST_ANTHROPIC_JUDGE_MODEL``, and
-``KENSA_TEST_OPENAI_JUDGE_MODEL``.
-"""
+"""End-to-end integration tests against real LLM APIs (skip via ``-m 'not integration'``)."""
 
 from __future__ import annotations
 
@@ -722,18 +716,7 @@ _CAPTURE_PROVIDERS = [
 
 @pytest.mark.integration
 class TestCaptureEndToEnd:
-    """Live capture → generate → run roundtrips, parametrized over Anthropic and OpenAI.
-
-    Pins the contract that:
-    - ``kensa capture -i "<str>"`` stores a clean reusable command and a trace
-      with real LLM spans; generated scenarios replay with ``scenario.input``
-      appended exactly once.
-    - ``kensa capture`` without ``-i`` preserves the full argv verbatim; the
-      generator emits ``scenario.input = None`` and the runner does NOT
-      double-append on replay. Locks in the fix for the blocker where
-      ``['python', 'agent.py', 'hello']`` was replaying as
-      ``['python', 'agent.py', 'hello', 'hello']``.
-    """
+    """Live capture → generate → run roundtrips, parametrized over Anthropic and OpenAI."""
 
     @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
     def test_capture_with_input_writes_live_trace_and_clean_command(
