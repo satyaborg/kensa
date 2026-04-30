@@ -165,11 +165,7 @@ def resolve_trace_paths(
     run_id: str | None,
     traces: tuple[Path, ...] | None,
 ) -> list[Path]:
-    """Pick trace files to feed the generator.
-
-    Priority: explicit ``--trace`` paths > ``--run-id`` manifest lookup > latest run.
-    Raises FileNotFoundError when nothing resolves.
-    """
+    """Resolve trace paths: explicit ``--trace`` > ``--run-id`` manifest > latest run."""
     if traces:
         return [Path(t) for t in traces]
 
@@ -195,10 +191,7 @@ def resolve_trace_paths(
 
 
 def _resolve_generate_manifest(run_id: str | None) -> Path:
-    """Resolve the manifest source for ``kensa generate``.
-
-    Prefers an explicit run ID, then the latest capture, then the latest eval run.
-    """
+    """Resolve the manifest source: explicit run-id, then latest capture, then latest eval."""
     if run_id:
         return manifest_path(run_id)
     try:
@@ -208,12 +201,7 @@ def _resolve_generate_manifest(run_id: str | None) -> Path:
 
 
 def is_verbatim_replay_capture(run_id: str | None, trace_paths: list[Path] | None) -> bool:
-    """Return True iff the resolved source manifest is a capture with no explicit ``-i`` input.
-
-    Such captures have the prompt baked into ``manifest.command`` argv, so
-    generated scenarios must leave ``scenario.input`` empty to avoid a
-    double-append on replay.
-    """
+    """True iff the resolved source manifest is a capture with no explicit ``-i`` input."""
     manifest: RunManifest | None = None
     try:
         if run_id:
@@ -234,17 +222,7 @@ def collect_noinput_commands(
     *,
     trace_paths: list[Path] | None = None,
 ) -> list[list[str]]:
-    """Return run_commands whose argv already bakes in the agent input.
-
-    A generated scenario that reuses one of these argvs must leave
-    ``scenario.input`` empty so the runner does not double-append. Only
-    no-``-i`` capture manifests qualify; ``-i`` captures and eval manifests
-    expect ``scenario.input`` to be appended on replay.
-
-    When the caller passes multiple traces spanning multiple manifests,
-    every matching no-``-i`` capture's command is included, so a mixed
-    generate still marks the right argvs for verbatim replay.
-    """
+    """Return capture argvs that already bake in the input; runner must not double-append."""
     manifests: list[RunManifest] = []
     if run_id:
         try:
@@ -275,11 +253,7 @@ def collect_noinput_commands(
 
 
 def _id_to_run_command(scenario_dir: Path) -> dict[str, list[str]]:
-    """Load every scenario in ``scenario_dir`` and return ``{scenario.id: run_command}``.
-
-    Matches on the internal ``scenario.id`` (not the filename), since kensa
-    accepts any ``.yaml`` filename for a scenario.
-    """
+    """Map ``{scenario.id: run_command}`` for every scenario in ``scenario_dir``."""
     from kensa.runner import load_scenario
 
     mapping: dict[str, list[str]] = {}
@@ -310,13 +284,7 @@ def _manifest_scenario_ids(run_id: str | None) -> set[str]:
 
 
 def _find_manifests_for_traces(trace_paths: list[Path]) -> list[RunManifest]:
-    """Return every manifest that references at least one of ``trace_paths``.
-
-    Walks ``.kensa/runs/`` newest-first. A manifest matches if any of its
-    ScenarioRuns (eval) or its ``trace_path`` (capture) resolves to a path
-    the caller asked about. Passing traces from different runs therefore
-    surfaces every source manifest rather than silently locking onto one.
-    """
+    """Return every manifest (newest-first) that references at least one of ``trace_paths``."""
     from kensa.paths import RUN_DIR
 
     if not RUN_DIR.is_dir():
@@ -355,12 +323,7 @@ def _find_manifests_for_traces(trace_paths: list[Path]) -> list[RunManifest]:
 
 
 def _find_manifest_for_traces(trace_paths: list[Path]) -> RunManifest | None:
-    """Back-compat helper: return a unique matching manifest, else ``None``.
-
-    Used where only a single source manifest makes sense (e.g. the
-    verbatim-replay signal). Returns ``None`` when zero or multiple
-    distinct manifests match.
-    """
+    """Return a unique matching manifest, or ``None`` when zero or multiple match."""
     matches = _find_manifests_for_traces(trace_paths)
     if len(matches) != 1:
         return None
@@ -373,17 +336,7 @@ def collect_run_commands(
     *,
     trace_paths: list[Path] | None = None,
 ) -> list[list[str]]:
-    """Return the unique ``run_command``s referenced in a run's scenarios.
-
-    Used to ground the LLM prompt so generated scenarios reuse the agent's
-    real entry point instead of hallucinating ``python agent.py``.
-
-    Scenario lookup goes by ``scenario.id`` (scans the directory), not by
-    filename, since filenames don't have to match ids. When ``run_id`` is
-    ``None`` and ``trace_paths`` is given, we search ``.kensa/runs/`` for a
-    manifest that references any of those traces.
-    Returns ``[]`` when nothing can be resolved.
-    """
+    """Return the unique ``run_command``s referenced in a run's scenarios."""
     manifests: list[RunManifest] = []
     if run_id:
         try:
@@ -441,11 +394,7 @@ def collect_run_commands(
 
 
 def _first_user_input(span: Span) -> str:
-    """Extract the last user message from an LLM span's input, best effort.
-
-    Handles two OTel attribute shapes: ``input.messages`` (OpenInference) and
-    ``input.value`` (JSON-serialized full request, used by some instrumentors).
-    """
+    """Extract the last user message from an LLM span's input."""
     if not span.input:
         return ""
     messages = _coerce_messages(span.input)
@@ -584,19 +533,7 @@ def generate_from_traces(
     noinput_commands: list[list[str]] | None = None,
     verbatim_replay: bool = False,
 ) -> list[Scenario]:
-    """Read traces, ask an LLM for scenarios, return validated Scenario objects.
-
-    Replay semantics are carried per recovered command via
-    ``noinput_commands``: any generated scenario whose ``run_command`` matches
-    an entry in that list gets ``scenario.input = None`` so the runner does
-    not double-append on replay. Captures made without ``-i`` qualify;
-    ``-i`` captures, eval runs, and user-supplied ``--run-command`` overrides
-    do not.
-
-    ``verbatim_replay`` is a coarse fallback for callers that haven't built
-    the per-command list (e.g. simple tests). When true, every scenario gets
-    ``input = None`` regardless of argv.
-    """
+    """Read traces, ask an LLM for scenarios, return validated Scenario objects."""
     from kensa.llm import get_completer
     from kensa.runner import read_trace
 

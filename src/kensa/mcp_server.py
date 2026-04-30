@@ -245,11 +245,7 @@ def _run_cost(results: list[Result]) -> float:
 
 
 def _progress_bridge(ctx: Context | None, loop: asyncio.AbstractEventLoop) -> tuple[Any, Any]:
-    """Build sync callbacks that schedule ``ctx`` progress on ``loop``.
-
-    Returns ``(on_run, on_judge)``. Each callback is a no-op when ``ctx`` is
-    ``None``, which keeps unit tests that skip Context cheap.
-    """
+    """Return ``(on_run, on_judge)`` callbacks that schedule progress on ``loop``."""
     if ctx is None:
         return None, None
 
@@ -307,7 +303,7 @@ def doctor() -> DoctorResponse:
     Returns the complete checklist plus a ``ready`` flag. Never fails; a
     misconfigured environment is reported via individual check entries.
     Readiness mirrors the CLI: non-key failures block readiness, while missing
-    provider-specific API keys do not — only the *absence of any* API key does.
+    provider-specific API keys do not, only the *absence of any* API key does.
     """
     from kensa.doctor import run_doctor
 
@@ -843,13 +839,7 @@ def run_server(
 
 
 def main() -> None:
-    """argparse entry point called by :mod:`kensa._mcp_launcher`.
-
-    The external ``kensa-mcp`` shim package (``packages/kensa-mcp/``)
-    registers a console script that routes through the launcher to here.
-    The ``kensa mcp`` click subcommand bypasses this and calls
-    :func:`run_server` directly.
-    """
+    """argparse entry point used by the ``kensa-mcp`` console script."""
     parser = argparse.ArgumentParser(description="Run the kensa MCP server.")
     parser.add_argument("--http", action="store_true", help="Use HTTP transport instead of stdio.")
     parser.add_argument("--host", default="127.0.0.1", help="HTTP host (with --http).")

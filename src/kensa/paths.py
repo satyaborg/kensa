@@ -7,11 +7,7 @@ from pathlib import Path
 
 
 class CaptureOnlyWorkspaceError(FileNotFoundError):
-    """Raised when the only runs on disk are captures, not evals.
-
-    Callers in CLI/MCP should pattern-match on this to surface capture-first
-    guidance (``kensa generate``) instead of the generic ``kensa run`` hint.
-    """
+    """Raised when the only runs on disk are captures; callers hint ``kensa generate``."""
 
 
 ROOT = Path(".kensa")
@@ -48,13 +44,7 @@ def latest_report_link() -> Path:
 
 
 def latest_manifest() -> Path:
-    """Return the path to the most recent run manifest.
-
-    Raises FileNotFoundError if no eval manifests exist. If only capture
-    manifests are present, the error points the user at ``kensa generate``
-    rather than ``kensa run`` so capture-first workspaces aren't silently
-    told to start over.
-    """
+    """Return the most recent eval manifest, or raise CaptureOnlyWorkspaceError if only captures."""
     if not RUN_DIR.exists():
         raise FileNotFoundError("No runs found. Run `kensa run` first.")
     manifests = sorted(RUN_DIR.glob("*.json"), reverse=True)
