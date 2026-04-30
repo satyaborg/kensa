@@ -50,12 +50,7 @@ def _relay_stream(stream: TextIO, sink: TextIO, chunks: deque[str]) -> None:
 
 
 def capture_command(command: list[str], captured_input: str | None = None) -> RunManifest:
-    """Run ``command`` once with tracing enabled and persist a capture manifest.
-
-    ``command`` is passed verbatim (no heuristic splitting). When
-    ``captured_input`` is provided it is appended as the final argv element
-    for the subprocess run, matching how ``kensa run`` appends ``scenario.input``.
-    """
+    """Run ``command`` once with tracing enabled and persist a capture manifest."""
     timestamp = datetime.now(tz=timezone.utc)
     run_id = _run_id(timestamp)
     argv = [*command, captured_input] if captured_input is not None else list(command)
