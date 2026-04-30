@@ -760,7 +760,7 @@ def capture(captured_input: str | None, argv: tuple[str, ...]) -> None:
 @cli.command(
     epilog="""\b
 Examples:
-  kensa generate                       # from latest run's traces
+  kensa generate                       # from latest capture or latest run
   kensa generate --run-id abc123
   kensa generate --trace path/to/trace.jsonl -n 5
   kensa generate --dry-run""",
@@ -814,10 +814,11 @@ def generate(
     source_scenario_dir: str | None,
     run_command_overrides: tuple[str, ...],
 ) -> None:
-    """Generate eval scenarios from existing traces."""
+    """Generate eval scenarios from captured traces."""
     import shlex
 
     from kensa.generate import (
+        collect_noinput_commands,
         collect_run_commands,
         generate_from_traces,
         resolve_trace_paths,
@@ -858,6 +859,34 @@ def generate(
         else:
             s.item("entrypoints: (none found; LLM may hallucinate — pass --run-command)", ok=False)
 
+        noinput_commands: list[list[str]] = []
+        if not run_command_overrides:
+            noinput_commands = collect_noinput_commands(
+                run_id,
+                trace_paths=list(trace_paths) if traces else None,
+            )
+        if noinput_commands:
+            s.item(
+                f"verbatim replay: {len(noinput_commands)} command(s) will ignore "
+                "scenario.input (captured without -i)"
+            )
+
+        if (
+            count > 1
+            and run_commands
+            and len(run_commands) == 1
+            and noinput_commands
+            and run_commands[0] in noinput_commands
+        ):
+            raise click.UsageError(
+                "All generated scenarios would replay the same baked-in prompt: "
+                "the capture has no -i marker and only one observed argv, so "
+                "scenario.input will be forced empty for every candidate.\n"
+                'Fix: re-capture with `kensa capture -i "<input>" -- <cmd>` so '
+                'scenarios can vary the prompt, or pass `--run-command "<clean argv>"` '
+                "to normalize the skeleton, or request only -n 1."
+            )
+
         import warnings
 
         with (
@@ -870,6 +899,7 @@ def generate(
                 count=count,
                 model=model,
                 run_commands=run_commands,
+                noinput_commands=noinput_commands or None,
             )
         for w in caught:
             s.item(str(w.message), ok=False)
