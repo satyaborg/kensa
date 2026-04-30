@@ -12,10 +12,10 @@ keywords:
 
 ## [0.6.2](https://github.com/satyaborg/kensa/releases/tag/v0.6.2) — 2026-04-27
 
-`uvx kensa init` is now a one-shot bootstrap: scaffold scenarios, add kensa as a dev dep, and drop the Claude Code skills into the project.
+`uvx kensa init` is now a one-shot bootstrap: scaffold scenarios, add kensa as a dev dep, and drop the skills into whichever coding agent you use.
 
-- New `kensa skills install` command copies the bundled skills into `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex, OpenCode, Cursor, and other adopters of the Agent Skills standard). Use `--global` to install into `~`, `--claude` / `--codex` to scope to one target, and `--force` to overwrite existing files.
-- `kensa init` gained `--cli` / `--skills` flags (and their negations). In an interactive terminal, each step prompts before mutating state. In CI, both default to skip unless passed explicitly.
+- New `kensa skills install` command copies the bundled skills into `.claude/skills/` (Claude Code) and `.agents/skills/` (Codex, Cursor, OpenCode, Gemini CLI, and other adopters of the Agent Skills standard). Use `--global` to write under `~`, `-a <agent>` to scope to a specific target, and `--force` to overwrite existing files.
+- `kensa init` gained `--cli` / `--no-cli` for the dev-dep step and `-a/--agent` for picking the coding agent (`claude`, `codex`, `cursor`, `opencode`, `gemini`, `other`, `all`, `none`). In an interactive terminal, the agent step prompts (defaulting from existing project markers); in CI the agent default is `none` so nothing is installed unless `-a` is passed.
 - When `kensa init` adds kensa via `uv add --dev`, it now points at `uv run kensa doctor` if the active interpreter is outside the project venv, so doctor checks reflect the right environment.
 
 ## [0.6.1](https://github.com/satyaborg/kensa/releases/tag/v0.6.1) — 2026-04-24

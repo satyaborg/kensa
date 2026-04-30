@@ -39,9 +39,12 @@ Claude Code uses `.claude/skills`. Codex, Cursor, OpenCode, Gemini CLI, and `oth
 ## Lifecycle
 
 ```
-Setup (audit-evals) → Design (generate-scenarios) → Calibrate (generate-judges)
-  → Validate (validate-judge) → Execute (kensa eval) → Diagnose (diagnose-errors) → Iterate
+Setup (audit-evals) → Capture (kensa capture) → Design (generate-scenarios)
+  → Calibrate (generate-judges) → Validate (validate-judge) → Execute (kensa eval)
+  → Diagnose (diagnose-errors) → Iterate
 ```
+
+`generate-scenarios` mines whatever traces it can find. When `kensa capture -- <cmd>` produced the most recent run, the synthesized scenarios reuse the captured `run_command` and (with `-i`) the captured input verbatim, so they replay against the same entrypoint without manual editing.
 
 ## /audit-evals
 

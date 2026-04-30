@@ -39,7 +39,7 @@ keywords:
     In non-interactive environments, pass the coding agent explicitly:
 
     ```bash
-    uvx kensa init -a all --blank
+    uvx kensa init -a all
     ```
 
     If you don't use uv, replace the dep-add step with `pip install kensa` and pass `--no-cli` to skip mutating `pyproject.toml`:
@@ -47,6 +47,12 @@ keywords:
     ```bash
     uvx kensa init --no-cli
     pip install kensa
+    ```
+
+    To bootstrap with a working demo agent and scenario you can run immediately, add `--example`:
+
+    ```bash
+    uvx kensa init --example
     ```
 
     If you primarily use Claude Code, the plugin is an equivalent install path:
@@ -125,11 +131,13 @@ Then in your coding agent:
 
 ## Prefer the CLI only?
 
-You can use kensa without skills if you want explicit control:
+You can use kensa without skills if you want explicit control. Capture one real run, synthesize scenarios from it, then evaluate:
 
 ```bash title="CLI only"
-kensa init
+kensa init --no-cli                                # scaffold .kensa/ without touching deps
 kensa doctor
+kensa capture -i "refund this order" -- python agent.py
+kensa generate                                     # mine the capture for scenarios
 kensa eval
 ```
 

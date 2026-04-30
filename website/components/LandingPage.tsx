@@ -96,7 +96,8 @@ const skills = [
 ];
 
 const cliCommands = [
-  { cmd: "kensa init", desc: "Scaffold with an example agent" },
+  { cmd: "kensa init", desc: "Scaffold .kensa/, install kensa, set up skills" },
+  { cmd: "kensa capture", desc: "Run your agent once with tracing for replay" },
   { cmd: "kensa generate", desc: "Synthesize scenarios from captured traces" },
   { cmd: "kensa eval", desc: "run + judge + report in one shot" },
   { cmd: "kensa run", desc: "Execute scenarios, capture traces" },
@@ -104,6 +105,7 @@ const cliCommands = [
   { cmd: "kensa report", desc: "Terminal, markdown, JSON, or HTML output" },
   { cmd: "kensa analyze", desc: "Cost/latency stats + anomaly flagging" },
   { cmd: "kensa doctor", desc: "Pre-flight environment checks" },
+  { cmd: "kensa skills install", desc: "Drop skills into Claude Code or Agent Skills clients" },
   { cmd: "kensa mcp", desc: "Serve kensa over MCP for LLM clients" },
 ];
 

@@ -14,31 +14,57 @@ kensa works standalone without a coding agent. Python 3.10+.
 
 ## kensa init
 
-Scaffold `.kensa/` with an example scenario and agent.
+Scaffold `.kensa/`, add `kensa` to your project dev deps, and install skills for your coding agent.
 
 ```bash
-kensa init           # create .kensa/ with example files
-kensa init --force   # overwrite the existing example
-kensa init --blank   # scaffold directories only, skip the example
-kensa init -a codex
-kensa init -a all --blank
+kensa init                # scaffold .kensa/, add kensa, prompt for agent
+kensa init --example      # also drop in a demo agent + scenario
+kensa init -a codex       # install skills for Codex (no prompt)
+kensa init -a all         # install skills for every supported agent
+kensa init --no-cli       # skip the dev-dep step
+kensa init --force        # overwrite existing scaffolded files
 ```
 
-In an interactive terminal, `kensa init` prompts for the coding agent to install skills for, defaulting from existing project markers or `all` in a fresh repo. In non-interactive environments, pass `-a/--agent claude|codex|cursor|opencode|gemini|other|all|none`.
+| Flag | Default | Description |
+|---|---|---|
+| `--example` | off | Scaffold a demo agent and demo scenario alongside the bare layout |
+| `-a, --agent` | prompt | One of `claude`, `codex`, `cursor`, `opencode`, `gemini`, `other`, `all`, `none` |
+| `--cli/--no-cli` | install | Add `kensa` to project dev deps via `uv add --dev` |
+| `--force` | off | Overwrite existing scaffolded files |
 
-Detects your API keys and scaffolds accordingly:
+By default, `kensa init` is bare: it creates `.kensa/scenarios/`, `.kensa/agents/`, etc. but no example. Pass `--example` for a working agent and scenario you can run immediately with `kensa eval`. In an interactive terminal, the agent step prompts and defaults from existing project markers or `all` in a fresh repo. In non-interactive environments, the agent default is `none` — pass `-a/--agent` explicitly to install skills.
+
+When `--example` is set, kensa picks the example agent based on your API keys:
 - `ANTHROPIC_API_KEY` set → Anthropic agent using `claude-haiku-4-5`
 - `OPENAI_API_KEY` set → OpenAI agent using `gpt-5.4-mini`
 - Neither → stub agent (no API call)
 
-Creates `.kensa/agents/example.py` and `.kensa/scenarios/example.yaml`. Run `kensa eval` immediately after to verify your setup. Use `--blank` if you want an empty `.kensa/` and plan to write scenarios yourself or via a coding agent.
+For a zero-install bootstrap from scratch, run `uvx kensa init` instead of installing kensa first.
+
+## kensa capture
+
+Run your agent once with full instrumentation and persist the trace as a capture run that `kensa generate` can mine for scenarios.
+
+```bash
+kensa capture -i "refund this order" -- python agent.py
+kensa capture -i "classify this ticket" -- uv run python src/agent.py
+kensa capture -- python agent.py             # agent reads its own input
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-i, --input` | — | Input string appended as the final argv element (mirrors `scenario.input`) |
+
+`kensa capture -- <cmd> [args...]` runs `<cmd>` in a subprocess with `KENSA_TRACE_DIR` set, streams stdout/stderr through, and writes the trace plus a manifest tagged `kind: capture`. Capture runs are stored alongside eval runs but are excluded from `kensa judge`, `kensa report`, and `kensa eval` — those commands fail fast on a capture manifest with a hint to use `kensa generate` instead.
+
+The recommended flow is `kensa capture -i "<input>" -- <cmd>`; the explicit `-i` marker lets `kensa generate` reuse the same `run_command` and input verbatim in synthesized scenarios.
 
 ## kensa generate
 
-Synthesize scenario YAMLs from captured traces using an LLM. Run `kensa run` first so there are traces to mine.
+Synthesize scenario YAMLs from captured traces using an LLM. Run `kensa capture -- <cmd>` (or `kensa run`) first so there are traces to mine.
 
 ```bash
-kensa generate                               # 3 scenarios from the latest run
+kensa generate                               # 3 scenarios from the latest capture or run
 kensa generate -n 5                          # 5 scenarios
 kensa generate --run-id 20260423T120000      # from a specific run
 kensa generate --trace path/to/trace.jsonl   # from an explicit trace file (repeatable)
@@ -59,7 +85,7 @@ kensa generate --run-command 'python .kensa/agents/app.py'  # override entrypoin
 | `--source-scenario-dir` | auto | Where to scan for existing scenarios when recovering the observed `run_command`. Defaults to `--scenario-dir` if it already has scenarios, otherwise `.kensa/scenarios`. |
 | `--run-command` | inferred | Entrypoint argv to hint to the LLM (repeatable) |
 
-Source priority: `--trace` → `--run-id` → latest run manifest. When the manifest references exactly one `run_command`, generated scenarios are rewritten to use it verbatim; with multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
+Source priority: `--trace` → `--run-id` → latest manifest (capture or eval). When the manifest is a `kensa capture` run, generated scenarios reuse its `run_command` verbatim and, if the capture was created with `-i`, lift the captured input into `scenario.input`. With an eval manifest that has multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
 
 Model resolution mirrors `kensa judge`: `KENSA_JUDGE_MODEL` env var → `ANTHROPIC_API_KEY` (uses `claude-sonnet-4-6`) → `OPENAI_API_KEY` (uses `gpt-5.4-mini`). Keys can live in a `.env` walked up from cwd.
 
@@ -104,7 +130,7 @@ kensa run --format json                # machine-readable manifest
 | `--dry-run` | off | List scenarios that would run, without executing |
 | `--format` | `text` | `text` or `json` |
 
-Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. Traces are written as JSONL to `.kensa/traces/`.
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. Traces are written as JSONL to `.kensa/traces/`. `kensa run` produces an eval run; use `kensa capture` for one-off invocations you want to feed into `kensa generate`.
 
 ## kensa judge
 
@@ -205,6 +231,27 @@ For a zero-install launcher (no `uv add` needed), use the `kensa-mcp` shim packa
 | `--port` | `8765` | HTTP port (with `--http`) |
 
 Exposes 7 tools (`init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`) and 8 resources under the `kensa://` namespace. See [MCP server](/mcp-server) for the full reference.
+
+## kensa skills install
+
+Copy the bundled skills into Claude Code (`.claude/skills/`) and the open Agent Skills directory (`.agents/skills/`) used by Codex, Cursor, OpenCode, Gemini CLI, and other adopters.
+
+```bash
+kensa skills install                  # all agents, project-scoped
+kensa skills install -a claude         # Claude Code only
+kensa skills install -a codex          # Codex only (writes to .agents/skills/)
+kensa skills install -a all            # Claude Code + the Agent Skills standard
+kensa skills install --global          # write to ~/.claude/skills and ~/.agents/skills
+kensa skills install --force           # overwrite existing skill directories
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-a, --agent` | `all` | One of `claude`, `codex`, `cursor`, `opencode`, `gemini`, `other`, `all` |
+| `--global` | off | Install under `~/.claude/skills` and `~/.agents/skills` instead of the project |
+| `--force` | off | Overwrite existing skill directories |
+
+Use this after a kensa upgrade to refresh the skill files in projects you have already initialized. `kensa init` runs the equivalent install on first setup.
 
 ## Environment variables
 

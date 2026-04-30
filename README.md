@@ -49,7 +49,7 @@ uvx kensa init
 
 Adds `kensa` to your dev deps, scaffolds `.kensa/`, and adds 5 skills for the
 complete evals workflow. Works with Claude Code, Codex, Cursor, and other coding
-agents. For non-interactive setup or CI: `uvx kensa init --cli --agent all --blank`.
+agents. For non-interactive setup or CI: `uvx kensa init --cli --agent all`.
 
 ## Quickstart
 
@@ -91,14 +91,15 @@ uv add "kensa[all]"
 
 | Command | What it does |
 | --- | --- |
-| `kensa init --blank` | Scaffold `.kensa/` without example content |
+| `kensa init` | Scaffold `.kensa/`, add kensa as a dev dep, install skills (use `--example` for a demo agent) |
 | `kensa doctor` | Check instrumentation, config, and environment readiness |
+| `kensa capture -- <cmd>` | Run your agent once with tracing, then feed it into `kensa generate` |
 | `kensa generate` | Synthesize scenario YAMLs from captured traces via an LLM |
 | `kensa eval` | Run + judge + report in one command |
 | `kensa report` | Show the latest results in terminal, Markdown, JSON, or HTML |
 
 See the [CLI docs](https://kensa.sh/docs/cli) for `run`, `judge`, `analyze`,
-`mcp`, and the full command reference.
+`mcp`, `skills install`, and the full command reference.
 
 ## MCP server
 
@@ -138,7 +139,7 @@ resources, and manual config.
 If you want to author evals yourself:
 
 ```bash
-kensa init --blank
+kensa init                    # scaffolds a bare .kensa/ — pass --example for a demo
 kensa doctor
 ```
 

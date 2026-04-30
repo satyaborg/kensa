@@ -32,13 +32,20 @@ Traces include:
 
 ## Passive trace collection
 
-Collect traces outside of kensa's eval loop:
+Capture traces from a real agent invocation without writing a scenario first. The recommended path is `kensa capture`, which sets up `KENSA_TRACE_DIR`, persists a manifest tagged `kind: capture`, and lets `kensa generate` reuse the entrypoint and input verbatim:
+
+```bash
+kensa capture -i "refund this order" -- python my_agent.py
+kensa generate                                            # mine the capture
+```
+
+For ad-hoc collection without a manifest, set the env var directly:
 
 ```bash
 KENSA_TRACE_DIR=traces/ python my_agent.py
 ```
 
-Feed them back later for trace-informed scenario generation.
+Either way, the resulting JSONL feeds back into `kensa generate` for trace-informed scenarios.
 
 ## OTel compatibility
 
