@@ -26,6 +26,7 @@ from kensa.models import (
     JudgePromptSpec,
     Result,
     ResultStatus,
+    RunKind,
     RunManifest,
     Scenario,
     Span,
@@ -37,6 +38,7 @@ from kensa.paths import (
     RUN_DIR,
     SCENARIO_DIR,
     TRACE_DIR,
+    CaptureOnlyWorkspaceError,
     latest_manifest,
     manifest_path,
     report_path,
@@ -48,6 +50,7 @@ ErrorCode = Literal[
     "scenario_not_found",
     "scenario_invalid",
     "run_not_found",
+    "run_not_evalable",
     "no_judge_key",
     "invalid_run_id",
     "path_escape",
@@ -266,17 +269,29 @@ def _progress_bridge(ctx: Context | None, loop: asyncio.AbstractEventLoop) -> tu
 
 
 @mcp.tool
-def init(blank: bool = False, force: bool = False) -> InitResponse | MCPError:
+def init(
+    force: bool = False,
+    example: bool = False,
+    blank: bool | None = None,
+) -> InitResponse | MCPError:
     """Scaffold ``.kensa/`` (idempotent).
 
-    Creates ``scenarios/``, ``traces/``, ``judges/``, ``agents/``. Unless
-    ``blank`` is true, writes an example agent and scenario chosen from
+    Creates ``scenarios/``, ``traces/``, ``judges/``, ``agents/``. When
+    ``example`` is true, writes a demo agent and scenario chosen from the
     available API keys. ``force`` overwrites an existing example.
+
+    Behavior change: as of the capture-command release, the no-arg
+    ``init()`` call scaffolds the directory empty instead of writing the
+    example. Pass ``example=True`` to restore the previous behavior.
+    ``blank`` is accepted as an inverse alias for callers pinned to the
+    pre-capture signature (``blank=True`` suppresses ``example``) but does
+    not flip the new default.
     """
     from kensa.scaffold import init_kensa
 
+    include_example = example and blank is not True
     try:
-        result = init_kensa(blank=blank, force=force)
+        result = init_kensa(include_example=include_example, force=force)
     except OSError as e:
         return MCPError(error=str(e), code="internal")
     return InitResponse(**result.model_dump())
@@ -388,8 +403,21 @@ async def judge(
 
     try:
         manifest = _load_manifest_or_latest(run_id)
+    except CaptureOnlyWorkspaceError as e:
+        return MCPError(
+            error=str(e),
+            code="run_not_found",
+            hint="Call generate() to turn captures into scenarios, then run().",
+        )
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call run() first.")
+
+    if manifest.kind != RunKind.EVAL:
+        return MCPError(
+            error=f"Run {manifest.run_id!r} is a capture run, not an eval run.",
+            code="run_not_evalable",
+            hint="Call generate() to turn the capture into scenarios, then run().",
+        )
 
     try:
         provider = get_judge(model) if manifest_requires_judge(manifest, scenario_dir) else None
@@ -560,7 +588,24 @@ def report(
         if run_id is None:
             manifest = _load_manifest_or_latest(None)
             run_id = manifest.run_id
+        else:
+            try:
+                manifest = _load_manifest_or_latest(run_id)
+            except FileNotFoundError:
+                manifest = None
+            if manifest is not None and manifest.kind != RunKind.EVAL:
+                return MCPError(
+                    error=f"Run {manifest.run_id!r} is a capture run, not an eval run.",
+                    code="run_not_evalable",
+                    hint="Call generate() to turn the capture into scenarios, then run().",
+                )
         results = _load_results(run_id)
+    except CaptureOnlyWorkspaceError as e:
+        return MCPError(
+            error=str(e),
+            code="run_not_found",
+            hint="Call generate() to turn captures into scenarios, then run() and judge().",
+        )
     except FileNotFoundError as e:
         return MCPError(error=str(e), code="run_not_found", hint="Call judge() or eval() first.")
 
@@ -591,15 +636,23 @@ def analyze(trace_dir: str = str(TRACE_DIR)) -> Analysis:
 
 @mcp.resource("kensa://runs")
 def runs_list() -> list[RunListItem]:
-    """List the most recent runs (newest first, up to 50)."""
+    """List the most recent eval runs (newest first, up to 50).
+
+    Capture manifests are filtered out *before* the 50-item cap so a
+    workspace full of recent captures does not push eval history off the
+    window.
+    """
     if not RUN_DIR.exists():
         return []
-    paths = sorted(RUN_DIR.glob("*.json"), reverse=True)[:50]
     out: list[RunListItem] = []
-    for p in paths:
+    for p in sorted(RUN_DIR.glob("*.json"), reverse=True):
+        if len(out) >= 50:
+            break
         try:
             manifest = RunManifest.model_validate_json(p.read_text())
         except (OSError, ValueError):
+            continue
+        if manifest.kind != RunKind.EVAL:
             continue
         total_runs = sum(len(r) for r in manifest.scenarios.values())
         completed = sum(1 for r in manifest.scenarios.values() for sr in r if sr.exit_code == 0)
@@ -625,6 +678,8 @@ def run_detail(run_id: str) -> RunDetail:
         manifest = RunManifest.model_validate_json(manifest_path(run_id).read_text())
     except FileNotFoundError as e:
         raise ResourceError(f"Run not found: {run_id}") from e
+    if manifest.kind != RunKind.EVAL:
+        raise ResourceError(f"Run {run_id!r} is a capture run")
 
     summary: JudgeSummary | None = None
     try:

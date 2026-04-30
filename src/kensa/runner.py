@@ -182,7 +182,11 @@ def write_sitecustomize(tmp_dir: str) -> None:
 
 
 def build_pythonpath(tmp_dir: str, env: dict[str, str]) -> str:
-    """Prepend *tmp_dir* to PYTHONPATH so sitecustomize.py is loaded first."""
+    """Build PYTHONPATH that activates sitecustomize.
+
+    Prepends *tmp_dir* (for sitecustomize.py) to the existing PYTHONPATH
+    from *env* (which already includes .env merges and scenario overrides).
+    """
     parts = [tmp_dir]
     existing = env.get("PYTHONPATH", "")
     if existing:
