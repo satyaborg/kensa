@@ -775,7 +775,7 @@ def run_server(
     host: str = "127.0.0.1",
     port: int = 8765,
 ) -> None:
-    """Launch the MCP server (stdio or http; http binds to 127.0.0.1 — no auth)."""
+    """Launch the MCP server; http binds 127.0.0.1 with no auth, do not expose publicly."""
     if transport == "stdio":
         mcp.run()
     elif transport == "http":

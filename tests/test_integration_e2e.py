@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import os
 import textwrap
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -694,19 +695,22 @@ class TestChecksAgainstRealSpans:
         assert result.passed, result.detail
 
 
-def _prepare_anthropic_provider() -> str:
-    """Skip unless Anthropic is ready; ensure routing picks it. Returns the agent body."""
+PrepareProvider = Callable[[pytest.MonkeyPatch], str]
+
+
+def _prepare_anthropic_provider(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Skip unless Anthropic is ready; isolate routing to it. Returns the agent body."""
     _skip_unless_anthropic_ready()
-    os.environ.setdefault("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
-    os.environ.pop("OPENAI_API_KEY", None)
+    monkeypatch.setenv("KENSA_TEST_ANTHROPIC_MODEL", _anthropic_model())
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     return _ANTHROPIC_SIMPLE_AGENT
 
 
-def _prepare_openai_provider() -> str:
-    """Skip unless OpenAI is ready; ensure routing picks it. Returns the agent body."""
+def _prepare_openai_provider(monkeypatch: pytest.MonkeyPatch) -> str:
+    """Skip unless OpenAI is ready; isolate routing to it. Returns the agent body."""
     _skip_unless_openai_ready()
-    os.environ.setdefault("KENSA_TEST_OPENAI_MODEL", _openai_model())
-    os.environ.pop("ANTHROPIC_API_KEY", None)
+    monkeypatch.setenv("KENSA_TEST_OPENAI_MODEL", _openai_model())
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
     return _OPENAI_SIMPLE_AGENT
 
 
@@ -733,14 +737,17 @@ class TestCaptureEndToEnd:
 
     @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
     def test_capture_with_input_writes_live_trace_and_clean_command(
-        self, tmp_path: Path, prepare_provider: object
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        prepare_provider: PrepareProvider,
     ) -> None:
         from click.testing import CliRunner
 
         from kensa.cli import cli
         from kensa.models import RunKind, RunManifest
 
-        agent_body = prepare_provider()  # type: ignore[operator]
+        agent_body = prepare_provider(monkeypatch)
         agent = _write_agent(tmp_path, agent_body)
 
         runner = CliRunner()
@@ -769,7 +776,10 @@ class TestCaptureEndToEnd:
 
     @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
     def test_capture_with_input_roundtrips_through_generate_and_run(
-        self, tmp_path: Path, prepare_provider: object
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        prepare_provider: PrepareProvider,
     ) -> None:
         """capture -i → generate (live LLM) → run generated scenario → spans."""
         from click.testing import CliRunner
@@ -778,7 +788,7 @@ class TestCaptureEndToEnd:
         from kensa.generate import generate_from_traces
         from kensa.models import RunManifest
 
-        agent_body = prepare_provider()  # type: ignore[operator]
+        agent_body = prepare_provider(monkeypatch)
         agent = _write_agent(tmp_path, agent_body)
 
         runner = CliRunner()
@@ -812,7 +822,10 @@ class TestCaptureEndToEnd:
 
     @pytest.mark.parametrize("prepare_provider", _CAPTURE_PROVIDERS)
     def test_capture_without_input_roundtrips_as_verbatim_replay(
-        self, tmp_path: Path, prepare_provider: object
+        self,
+        tmp_path: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        prepare_provider: PrepareProvider,
     ) -> None:
         """Pins the no-`-i` blocker fix: argv preserved, scenario.input empty, no double-append."""
         from click.testing import CliRunner
@@ -821,7 +834,7 @@ class TestCaptureEndToEnd:
         from kensa.generate import generate_from_traces, is_verbatim_replay_capture
         from kensa.models import RunManifest
 
-        agent_body = prepare_provider()  # type: ignore[operator]
+        agent_body = prepare_provider(monkeypatch)
         agent = _write_agent(tmp_path, agent_body)
 
         runner = CliRunner()
