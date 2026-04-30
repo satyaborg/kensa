@@ -787,7 +787,7 @@ class TestCaptureEndToEnd:
 
             scenarios = generate_from_traces(
                 [Path(manifest.trace_path)],
-                count=1,
+                count=3,
                 run_commands=[list(manifest.command or [])],
                 verbatim_replay=False,
             )
@@ -839,7 +839,7 @@ class TestCaptureEndToEnd:
 
             scenarios = generate_from_traces(
                 [Path(manifest.trace_path)],
-                count=1,
+                count=3,
                 run_commands=[list(manifest.command)],
                 verbatim_replay=True,
             )
