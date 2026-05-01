@@ -14,28 +14,47 @@ kensa works standalone without a coding agent. Python 3.10+.
 
 ## kensa init
 
-Scaffold `.kensa/` with an example scenario and agent.
+Scaffold `.kensa/`, add the CLI to your project's dev deps, and install skills for your coding agent.
 
 ```bash
-kensa init           # create .kensa/ with example files
-kensa init --force   # overwrite the existing example
-kensa init --blank   # scaffold directories only, skip the example
-kensa init -a codex
-kensa init -a all --blank
+kensa init                 # bare scaffold + uv add --dev kensa + interactive agent prompt
+kensa init --example       # also write a demo agent and scenario
+kensa init --force         # overwrite the existing example (with --example)
+kensa init --no-cli        # skip the uv add --dev step
+kensa init -a codex        # non-interactive: install skills for one agent
+kensa init -a all          # install skills for every supported agent target
 ```
 
 In an interactive terminal, `kensa init` prompts for the coding agent to install skills for, defaulting from existing project markers or `all` in a fresh repo. In non-interactive environments, pass `-a/--agent claude|codex|cursor|opencode|gemini|other|all|none`.
 
-Detects your API keys and scaffolds accordingly:
+With `--example`, kensa detects your API keys and writes a demo:
 - `ANTHROPIC_API_KEY` set → Anthropic agent using `claude-haiku-4-5`
 - `OPENAI_API_KEY` set → OpenAI agent using `gpt-5.4-mini`
 - Neither → stub agent (no API call)
 
-Creates `.kensa/agents/example.py` and `.kensa/scenarios/example.yaml`. Run `kensa eval` immediately after to verify your setup. Use `--blank` if you want an empty `.kensa/` and plan to write scenarios yourself or via a coding agent.
+`--example` writes `.kensa/agents/example.py` and `.kensa/scenarios/example.yaml`; run `kensa eval` afterwards to verify your setup. Without `--example`, `kensa init` leaves the directory empty so you (or your coding agent) can author scenarios from scratch.
+
+## kensa capture
+
+Capture one real agent invocation so `kensa generate` has a trace to mine. Pass the child command after `--`.
+
+```bash
+kensa capture -i "refund this order" -- python agent.py
+kensa capture -i "classify this ticket" -- uv run python src/agent.py
+kensa capture -- python agent.py                # agent reads its own input
+```
+
+| Flag | Default | Description |
+|---|---|---|
+| `-i, --input` | — | Input string appended as the final argv element (mirrors `scenario.input`) |
+
+Writes a capture-kind run manifest under `.kensa/runs/` and a JSONL trace under `.kensa/traces/`. The child process inherits `KENSA_TRACE_DIR`, so any installed instrumentor (Anthropic, OpenAI, LangChain) records spans automatically. If no spans land, the CLI flags it and points at `kensa.instrument()`.
+
+`kensa run` rejects capture-kind manifests; only `kensa generate` consumes them.
 
 ## kensa generate
 
-Synthesize scenario YAMLs from captured traces using an LLM. Run `kensa run` first so there are traces to mine.
+Synthesize scenario YAMLs from captured traces using an LLM. Run `kensa capture` (or a prior `kensa run`) first so there are traces to mine.
 
 ```bash
 kensa generate                               # 3 scenarios from the latest run
@@ -59,7 +78,7 @@ kensa generate --run-command 'python .kensa/agents/app.py'  # override entrypoin
 | `--source-scenario-dir` | auto | Where to scan for existing scenarios when recovering the observed `run_command`. Defaults to `--scenario-dir` if it already has scenarios, otherwise `.kensa/scenarios`. |
 | `--run-command` | inferred | Entrypoint argv to hint to the LLM (repeatable) |
 
-Source priority: `--trace` → `--run-id` → latest run manifest. When the manifest references exactly one `run_command`, generated scenarios are rewritten to use it verbatim; with multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
+Source priority: `--trace` → `--run-id` → latest capture manifest → latest run manifest. When the manifest references exactly one `run_command`, generated scenarios are rewritten to use it verbatim; with multiple observed entrypoints, anything outside the allowlist is rejected. Pass `--run-command` explicitly when no manifest is available.
 
 Model resolution mirrors `kensa judge`: `KENSA_JUDGE_MODEL` env var → `ANTHROPIC_API_KEY` (uses `claude-sonnet-4-6`) → `OPENAI_API_KEY` (uses `gpt-5.4-mini`). Keys can live in a `.env` walked up from cwd.
 
