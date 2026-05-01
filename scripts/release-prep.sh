@@ -109,9 +109,7 @@ gh pr create \
     --title "chore: release ${TAG}" \
     --body "Bump version to ${NEXT} and update changelog.
 
-Merge this PR, then run:
-\`\`\`
-./scripts/release-tag.sh ${TAG}
-\`\`\`"
+- [ ] Review and polish \`CHANGELOG.md\` before merging
+- After merge, run \`./scripts/release-tag.sh ${TAG}\`"
 
 info "PR created. Merge it, then run: ./scripts/release-tag.sh ${TAG}"

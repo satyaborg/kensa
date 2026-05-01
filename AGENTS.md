@@ -26,8 +26,11 @@ ruff format --check src/ tests/                           # CI format check (no 
 uv run ty check
 
 # CLI
-kensa init                                               # scaffold .kensa/ (bare; no example)
+kensa init                                               # scaffold .kensa/ (bare; no example), add CLI to dev deps, prompt for agent
 kensa init --example                                     # scaffold .kensa/ with a demo agent + scenario
+kensa init --cli --agent all                             # non-interactive: install CLI + all agent skill targets
+kensa init --no-cli --agent none                         # scaffold-only, no project mutations
+kensa skills install --agent claude-code                 # install bundled skills into a project (or --global)
 kensa capture -- <cmd> [args...]                         # capture one real agent invocation as a trace
 kensa capture -i "<input>" -- <cmd> [args...]            # capture with an explicit input string (recommended)
 kensa doctor                                             # pre-flight environment checks
@@ -88,11 +91,12 @@ capture.py         ← models + paths + runner (kensa capture: subprocess + trac
 doctor.py          ← paths + utils (lazy: runner, styles)
 exporter.py        ← stdlib + opentelemetry only (JSONL span exporter, no kensa imports)
 scaffold.py        ← paths only (idempotent .kensa/ scaffolding, shared by CLI and MCP)
+skills_install.py  ← stdlib + pydantic only (bundled-skill installer + uv add --dev helper for `kensa init` and `kensa skills install`)
 llm.py             ← stdlib only (Completer protocol + Anthropic/OpenAI adapters; shared client + provider resolution; lazy: utils, runner)
 generate.py        ← models + paths (lazy: runner, utils, llm; scenario synthesis from traces)
 mcp_server.py      ← models + paths (lazy: runner, judge, report, analyzer, doctor, scaffold)
 _mcp_launcher.py   ← stdlib only (clean install-hint wrapper around mcp_server.main; consumed by the kensa-mcp shim package)
-cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, mcp_server, generate, capture)
+cli.py             ← models + paths + styles + judge (lazy: runner, report, analyzer, doctor, scaffold, skills_install, mcp_server, generate, capture)
 ```
 
 No circular deps. `models.py` is imported by everything. `utils.py` is the most shared utility (checks, judge, analyzer, doctor).

@@ -31,13 +31,20 @@ conventional_commits = true
 filter_unconventional = false
 split_commits = false
 commit_parsers = [
+    { message = "^chore: release", skip = true },
+    { message = "^Merge", skip = true },
     { message = "^feat", group = "Added" },
     { message = "^fix", group = "Fixed" },
     { message = "^chore", group = "Other" },
-    { message = "^Merge", skip = true },
     { body = ".*", group = "Other" },
 ]
 protect_breaking_commits = true
 filter_commits = false
 tag_pattern = "v[0-9].*"
 sort_commits = "newest"
+exclude_paths = [
+    "website/**",
+    "docs/**",
+    "packages/kensa-mcp/**",
+    "*.md",
+]
