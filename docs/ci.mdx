@@ -33,15 +33,15 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
 ```
 
-Exit codes: `0` = all pass, `1` = any fail.
+Exit codes: `0` = pipeline ran end-to-end, `1` = kensa itself errored (config, missing keys, scenario load failure). Failed scenarios do not change the exit code, gate on the report output instead.
 
 ## What needs API keys
 
 **Deterministic checks** need no API keys. They run entirely locally.
 
-**Judge criteria** need an API key for the LLM provider. Add keys as secrets. If omitted, judge criteria are skipped and don't block the pipeline.
+**Judge criteria** need an API key for the LLM provider. If any scenario sets `criteria` or `judge` and no API key is available, `kensa eval` exits `1`. Either add a provider key as a secret, or remove judge criteria from the scenarios you run in CI.
 
-This means you can run cost, latency, tool ordering, and output matching checks in CI for free, and optionally add LLM judging when keys are available.
+This means you can run cost, latency, tool ordering, and output matching checks in CI for free, and add LLM judging only when keys are wired up.
 
 ## Output formats
 
@@ -50,7 +50,8 @@ This means you can run cost, latency, tool ordering, and output matching checks 
 | Terminal | (default) | Local development |
 | Markdown | `--format markdown` | PR comments, CI logs |
 | JSON | `--format json` | Machine-readable, dashboards |
-| HTML | `--format html` | Standalone shareable report |
+
+`kensa eval` also writes a standalone HTML report to `.kensa/reports/{run_id}.html` automatically on every run; upload it as a CI artifact for a shareable view.
 
 ## PR comment integration
 

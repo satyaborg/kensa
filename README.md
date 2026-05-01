@@ -31,11 +31,8 @@ agents, and catch regressions every time you make a change.
 Open your coding agent and paste:
 
 ```text
-Install Kensa for agent-driven evals with `uvx kensa init --cli --agent all`,
-then evaluate this agent using Kensa's skills. Start with audit-evals, let it
-route to the right next step, and follow the eval lifecycle: generate scenarios,
-calibrate judges if needed, run `kensa eval`, diagnose failures, and recommend
-whether to fix the agent, the scenarios, or the judge.
+Run `uvx kensa init --cli --agent all`, then use the audit-evals skill and
+follow the eval lifecycle.
 ```
 
 Your agent does the setup, writes or updates evals, runs them, and reports what
@@ -49,7 +46,7 @@ uvx kensa init
 
 Adds `kensa` to your dev deps, scaffolds `.kensa/`, and adds 5 skills for the
 complete evals workflow. Works with Claude Code, Codex, Cursor, and other coding
-agents. For non-interactive setup or CI: `uvx kensa init --cli --agent all --blank`.
+agents. For non-interactive setup or CI: `uvx kensa init --cli --agent all`.
 
 ## Quickstart
 
@@ -91,7 +88,8 @@ uv add "kensa[all]"
 
 | Command | What it does |
 | --- | --- |
-| `kensa init --blank` | Scaffold `.kensa/` without example content |
+| `kensa init` | Scaffold `.kensa/` (bare; pass `--example` for a demo agent + scenario) |
+| `kensa capture -i "<input>" -- <cmd>` | Record one real agent run as a trace |
 | `kensa doctor` | Check instrumentation, config, and environment readiness |
 | `kensa generate` | Synthesize scenario YAMLs from captured traces via an LLM |
 | `kensa eval` | Run + judge + report in one command |
@@ -138,7 +136,7 @@ resources, and manual config.
 If you want to author evals yourself:
 
 ```bash
-kensa init --blank
+kensa init
 kensa doctor
 ```
 

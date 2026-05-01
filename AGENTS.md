@@ -30,7 +30,7 @@ kensa init                                               # scaffold .kensa/ (bar
 kensa init --example                                     # scaffold .kensa/ with a demo agent + scenario
 kensa init --cli --agent all                             # non-interactive: install CLI + all agent skill targets
 kensa init --no-cli --agent none                         # scaffold-only, no project mutations
-kensa skills install --agent claude-code                 # install bundled skills into a project (or --global)
+kensa skills install --agent claude                      # install bundled skills (choices: claude|codex|cursor|opencode|gemini|other|all; or --global)
 kensa capture -- <cmd> [args...]                         # capture one real agent invocation as a trace
 kensa capture -i "<input>" -- <cmd> [args...]            # capture with an explicit input string (recommended)
 kensa doctor                                             # pre-flight environment checks

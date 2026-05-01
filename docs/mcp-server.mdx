@@ -105,7 +105,7 @@ Read-only data under the `kensa://` namespace.
 
 | URI | What it returns |
 |---|---|
-| `kensa://runs` | List of the 50 most recent runs (newest first) |
+| `kensa://runs` | List of the 50 most recent eval runs (newest first; capture-only manifests are filtered out before the cap) |
 | `kensa://runs/{run_id}` | Manifest plus summary for one run |
 | `kensa://runs/{run_id}/results` | Full judged results for one run |
 | `kensa://runs/{run_id}/trace/{scenario}/{index}` | Spans for one scenario execution (`index` is 0-based; dataset-backed scenarios produce one entry per row) |
@@ -132,6 +132,10 @@ Tools never raise across the protocol boundary. Failures return a stable envelop
 | `scenario_not_found` | Requested scenario ID not in the directory |
 | `scenario_invalid` | YAML syntax or schema error in a scenario file |
 | `run_not_found` | Referenced run has no manifest on disk |
+| `run_not_evalable` | Targeted run is a capture, not an eval (use `kensa generate` instead) |
 | `no_judge_key` | No judge API key (`ANTHROPIC_API_KEY` / `OPENAI_API_KEY`) set |
 | `invalid_run_id` | `run_id` failed path-safety validation |
+| `path_escape` | A path argument tried to escape the workspace |
+| `unknown_format` | Requested report format is not one of `terminal` / `markdown` / `json` / `html` |
+| `subprocess_failed` | A scenario subprocess crashed before the runner could collect spans |
 | `internal` | Uncategorised failure, surface the message to the user |

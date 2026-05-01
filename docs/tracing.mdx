@@ -32,13 +32,22 @@ Traces include:
 
 ## Passive trace collection
 
-Collect traces outside of kensa's eval loop:
+Use `kensa capture` to record one real agent invocation as a trace, without writing a scenario first:
 
 ```bash
-KENSA_TRACE_DIR=traces/ python my_agent.py
+kensa capture -i "<example input>" -- python my_agent.py
 ```
 
-Feed them back later for trace-informed scenario generation.
+`kensa capture` runs your agent in a subprocess with `KENSA_TRACE_DIR` set and the runner's `sitecustomize.py` injected via `PYTHONPATH`, so instrumentation happens automatically. Feed the resulting trace into `kensa generate` to synthesize scenarios grounded in real inputs.
+
+For environments where the runner can't inject `sitecustomize` (non-Python entry points, `python -S`, embedded interpreters), call `instrument()` from your agent code as an escape hatch:
+
+```python
+from kensa import instrument
+instrument()
+```
+
+Then set `KENSA_TRACE_DIR=traces/` before invoking the process.
 
 ## OTel compatibility
 
