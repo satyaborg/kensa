@@ -26,6 +26,8 @@ agents, and catch regressions every time you make a change.
 
 ## Installation
 
+> Run these from the root of your Python agent repo.
+
 ### Paste this into your coding agent
 
 Open your coding agent and paste:
