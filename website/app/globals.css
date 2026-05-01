@@ -417,10 +417,6 @@ a.a-badge:hover {
     padding: 3px;
 }
 
-.a-logo-invert img {
-    filter: invert(1) brightness(1.1);
-}
-
 .a-logo-icon[data-tooltip]:hover::after {
     content: attr(data-tooltip);
     position: absolute;

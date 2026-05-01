@@ -109,46 +109,34 @@ const cliCommands = [
 
 const logos = [
   {
-    src: "/claude-logo.png",
+    src: "/claude-code-logo.svg",
     alt: "Claude Code",
     tooltip: "Claude Code",
     w: 24,
     h: 24,
   },
-  { src: "/cursor-logo.png", alt: "Cursor", tooltip: "Cursor", w: 24, h: 24 },
   {
-    src: "/openai-logo.png",
+    src: "/codex-logo.svg",
     alt: "Codex CLI",
     tooltip: "Codex CLI",
     w: 20,
     h: 20,
-    invert: true,
   },
+  { src: "/cursor-logo.svg", alt: "Cursor", tooltip: "Cursor", w: 24, h: 24 },
   {
-    src: "/gemini-logo.png",
+    src: "/gemini.svg",
     alt: "Gemini CLI",
     tooltip: "Gemini CLI",
     w: 20,
     h: 20,
   },
   {
-    src: "/github-copilot-logo.svg",
-    alt: "GitHub Copilot",
-    tooltip: "GitHub Copilot",
-    w: 22,
-    h: 18,
-    invert: true,
-  },
-  { src: "/kiro-logo.png", alt: "Kiro", tooltip: "Kiro", w: 20, h: 20 },
-  {
-    src: "/opencode-logo.png",
+    src: "/opencode.svg",
     alt: "OpenCode",
     tooltip: "OpenCode",
     w: 20,
     h: 20,
-    invert: true,
   },
-  { src: "/pi-logo.svg", alt: "Pi", tooltip: "Pi", w: 20, h: 20, pi: true },
 ];
 
 export function LandingPage() {
@@ -159,9 +147,9 @@ export function LandingPage() {
       <section className="a-hero">
         <div className="a-hero-inner">
           <div className="a-hero-copy">
-            <Link href="/docs/mcp-server" className="a-badge">
+            <Link href="/docs/cli#kensa-capture" className="a-badge">
               <span className="a-badge-tag">NEW</span>
-              MCP server available
+              kensa capture
             </Link>
             <h1 className="a-hero-title">Zero to evals in minutes.</h1>
             <p className="a-hook">
@@ -176,7 +164,7 @@ export function LandingPage() {
                 {logos.map((l) => (
                   <span
                     key={l.alt}
-                    className={`a-logo-icon${l.invert ? " a-logo-invert" : ""}${l.pi ? " a-logo-pi" : ""}`}
+                    className="a-logo-icon"
                     data-tooltip={l.tooltip}
                   >
                     <Image src={l.src} alt={l.alt} width={l.w} height={l.h} />
@@ -291,7 +279,7 @@ export function LandingPage() {
             <p className="a-footer-etymology">
               <span className="a-footer-reading">/ken·sa/</span>{" "}
               <span className="a-footer-def">
-                to inspect before releasing to the world.
+                to inspect before release.
               </span>
             </p>
           </div>
