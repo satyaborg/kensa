@@ -96,10 +96,11 @@ const skills = [
 ];
 
 const cliCommands = [
-  { cmd: "kensa init", desc: "Scaffold with an example agent" },
+  { cmd: "kensa init", desc: "Scaffold .kensa/ (bare; --example for a demo)" },
+  { cmd: "kensa capture", desc: "Record one real agent invocation as a trace" },
   { cmd: "kensa generate", desc: "Synthesize scenarios from captured traces" },
   { cmd: "kensa eval", desc: "run + judge + report in one shot" },
-  { cmd: "kensa run", desc: "Execute scenarios, capture traces" },
+  { cmd: "kensa run", desc: "Execute scenarios in subprocesses" },
   { cmd: "kensa judge", desc: "Deterministic checks + LLM judge" },
   { cmd: "kensa report", desc: "Terminal, markdown, JSON, or HTML output" },
   { cmd: "kensa analyze", desc: "Cost/latency stats + anomaly flagging" },
