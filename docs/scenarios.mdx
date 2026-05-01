@@ -50,8 +50,8 @@ criteria: |
 | `name` | Yes | Human-readable name |
 | `description` | No | What this scenario tests |
 | `source` | No | How it was generated: `code`, `traces`, or `user` |
-| `input` | Yes | The prompt or input to the agent |
-| `run_command` | Yes | Argv list passed to `subprocess.run` (no shell). The scenario `input` is appended as the final element. |
+| `input` | No | The prompt or input to the agent. Omit when the agent reads its own input or when the scenario uses `dataset`. |
+| `run_command` | Yes | Argv list passed to `subprocess.run` (no shell). When `input` is set, it is appended as the final argv element. |
 | `env_overrides` | No | Extra environment variables for this scenario's subprocess |
 | `dataset` | No | Path to a JSONL file for parameterized inputs (requires `input_field`) |
 | `input_field` | No | JSONL field to use as the input (required when `dataset` is set) |

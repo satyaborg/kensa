@@ -10,7 +10,7 @@ keywords:
   - code reviewer
 ---
 
-Each example in `examples/` demonstrates a different agent domain with realistic stakes. They are useful when you want to understand what good scenarios look like before pointing kensa at your own repo.
+Each example in `examples/` demonstrates a different agent domain with realistic stakes. Each one is a complete, runnable agent so you can point kensa at it end-to-end before pointing kensa at your own repo. Generate scenarios from a capture (`kensa capture` then `kensa generate`) or write them by hand against the documented behavior.
 
 <Tip>If you want the fastest demo, start with `examples/sql-analyst` or `examples/incident-triage`. They give you concrete tool use, measurable failure modes, and clear success criteria.</Tip>
 
@@ -34,7 +34,7 @@ Each example in `examples/` demonstrates a different agent domain with realistic
 
     **Path:** `examples/code-reviewer`
 
-    Review agent that checks for ten vulnerability categories. Great for false-positive pressure and missed-critical-bug evaluation.
+    Review agent that checks 16 rules across 8 categories (injection, secrets, auth, crypto, concurrency, error-handling, data, performance). Great for false-positive pressure and missed-critical-bug evaluation.
   </Card>
   <Card title="Customer Support">
     **Domain:** CX

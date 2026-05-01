@@ -82,7 +82,7 @@ judge: confirms_before_action
 
 ## Cold-start caveat
 
-In cold-start mode (no human labels), the judge is unvalidated, not calibrated against expert labels. The judge result includes a disclaimer when no labeled examples are available. Use the `/validate-judge` skill to calibrate.
+Without human-labeled examples, the judge is unvalidated: its verdicts have not been measured against ground truth. Treat early results as directional. Use the `/validate-judge` skill to measure TPR/TNR against labels in `.kensa/labels/` and calibrate before relying on the judge to gate decisions.
 
 ## Protocol-based architecture
 

@@ -52,10 +52,10 @@ Use Glob to check what exists:
 
 Recommend a single next action based on findings:
 
-- **No `.kensa/` directory**: Fresh start. Run `kensa init --blank` to scaffold the directory structure without example files. Then scan the codebase (below) and hand off to `generate-scenarios` to create real scenarios directly.
-- **`.kensa/` exists but empty** (no scenarios, no traces): Blank scaffold from `kensa init --blank` or manual setup. Scan the codebase (below) and hand off to `generate-scenarios`.
-- **Has `.kensa/` with only example scenario**: Init was run without `--blank`. Scan the codebase (below) to understand the real agent, then hand off to `generate-scenarios` to replace the example.
-- **No scenarios, has traces**: Traces exist from manual runs. Run `kensa analyze` to surface patterns, then hand off to `generate-scenarios` with the analysis as context.
+- **No `.kensa/` directory**: Fresh start. Run `kensa init` to scaffold (bare; no example). Then scan the codebase (below). Prefer the trace-first path: `kensa capture -i "<example input>" -- <agent command>` to record one real run, then hand off to `generate-scenarios` (it will use the capture). If capture is not feasible, hand off without traces.
+- **`.kensa/` exists but empty** (no scenarios, no traces): Bare scaffold. Scan the codebase, then offer `kensa capture` before handing off to `generate-scenarios`.
+- **Has `.kensa/` with only example scenario**: Init was run with `--example`. Scan the codebase, then hand off to `generate-scenarios` to replace the example.
+- **No scenarios, has traces**: Traces exist from `kensa capture`. Run `kensa analyze` to surface patterns, then hand off to `generate-scenarios` with the analysis as context.
 - **Has scenarios, no traces**: Scenarios are ready but never run. Recommend: `kensa eval`.
 - **Has scenarios, has traces and results**: Full loop is active. Check both data stores:
   1. Run `kensa report --format json` and count scenarios with `status: "fail"`, `"error"`, or `"uncertain"`. This catches check failures and judge rejections that leave no trace anomaly.

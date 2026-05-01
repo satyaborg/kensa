@@ -32,7 +32,7 @@ Before writing scenarios, understand the agent. If coming from `audit-evals`, th
 3. Expected behaviors from system prompts or docs
 4. Known failure modes (ask the user)
 
-**If coming from `kensa init`**, an example scenario exists at `.kensa/scenarios/example.yaml` and an example agent at `.kensa/agents/example.py`. Read both to understand the scaffolded structure, then replace them with real scenarios targeting the user's agent. Don't build on the example, it's a template, not a starting point.
+**If `kensa init --example` was used**, a demo scenario exists at `.kensa/scenarios/example.yaml` and a demo agent at `.kensa/agents/example.py`. Read both to understand the scaffolded structure, then replace them with real scenarios targeting the user's agent. Don't build on the example, it's a template, not a starting point. Plain `kensa init` (no `--example`) leaves `.kensa/scenarios/` empty.
 
 If traces exist from a previous run, read them first:
 
@@ -42,16 +42,19 @@ kensa analyze --format json
 
 Use flagged traces to inform scenario design. Traces with errors, cost outliers, or repeated tool calls reveal real failure modes worth testing.
 
-### Fast path: `kensa generate`
+### Fast path: `kensa capture` → `kensa generate`
 
-When traces exist, `kensa generate` proposes scenarios grounded in real inputs, observed tool names, and cost/turn bounds. Faster than handcrafting.
+The grounded path. `kensa capture` records one real agent invocation, then `kensa generate` synthesizes scenarios from the captured trace. Generated scenarios carry replay semantics: the captured argv and input are reused so the scenario re-runs the same command shape.
 
 ```bash
+kensa capture -i "<example input>" -- <agent run command>
 kensa generate -n 5 --dry-run   # preview
 kensa generate -n 5             # write to .kensa/scenarios/
 ```
 
-Review before committing: the CLI enforces structural rules, you own scenario quality.
+Pass `-i` so generated scenarios can vary the input. Without it, every generated scenario replays the same baked-in prompt and `kensa generate` will warn.
+
+If traces already exist from a prior capture, skip straight to `kensa generate`. Review before committing: the CLI enforces structural rules, you own scenario quality.
 
 **If coming from `diagnose-errors`**, the diagnosis context (which scenarios failed, root causes, fix category) should guide what you write. Target the specific failure patterns identified, don't regenerate from scratch.
 

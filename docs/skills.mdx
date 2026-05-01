@@ -15,15 +15,10 @@ Say "evaluate my agent" in Claude Code or any skill-aware coding agent, and one 
 ## Installation
 
 ```bash
-# Skills + CLI (recommended): works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and more
 uvx kensa init
-
-# Or, for Claude Code, install as a plugin
-/plugin marketplace add satyaborg/kensa
-/plugin install kensa
 ```
 
-`uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Use `kensa skills install` later to refresh after a kensa upgrade.
+Adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI, and more. Use `kensa skills install` later to refresh after a kensa upgrade.
 
 ```bash
 kensa skills install -a claude
