@@ -1,64 +1,77 @@
 # kensa
 
-The open source agent evals harness. Tell your coding agent to "evaluate my agent" and get a working eval suite in minutes. Deterministic checks + LLM judge. No platform needed. MIT licensed.
+The open source agent evals harness. Tell your coding agent to "evaluate my agent" and get a working eval suite in minutes. Deterministic checks + LLM judge. No platform needed. MIT licensed. Python 3.10+.
 
 ## Install
 
-- Skills + CLI (recommended): `uvx kensa init` adds `kensa` to your dev deps, scaffolds `.kensa/`, and prompts you to choose which coding agent to install skills for. Non-interactive: `uvx kensa init --cli -a all --blank`. Works with Claude Code, Codex, Cursor, OpenCode, Gemini CLI.
-- Claude Code plugin: `/plugin marketplace add satyaborg/kensa` then `/plugin install kensa`
+Three entry points, same harness underneath.
 
-Provider extras: `uv add "kensa[anthropic]"`, `uv add "kensa[openai]"`, `uv add "kensa[langchain]"`, `uv add "kensa[all]"`
+- **Skills + CLI (recommended)**: `uvx kensa init` adds `kensa` to your project's dev deps, scaffolds a bare `.kensa/`, and prompts you to choose which coding agent gets the bundled skills. Non-interactive: `uvx kensa init --cli --agent all`. Add `--example` to scaffold a demo agent and demo scenario alongside the bare layout. Use `--no-cli` to skip the dev-dep install (scaffold-only). Use `--agent none` to skip skill installation.
+- **Claude Code plugin**: `/plugin marketplace add satyaborg/kensa` then `/plugin install kensa`. Bundles the same five skills.
+- **CLI-only**: `uvx kensa init` (bare scaffold) → `kensa capture -i "<input>" -- <your agent>` (record one real run as a trace) → `kensa generate` (synthesize scenarios from the capture) → `kensa eval` (run + judge + report).
+
+Skill targets supported by `kensa init` and `kensa skills install`: `claude`, `codex`, `cursor`, `opencode`, `gemini`, `other`, `all`. `other` drops a generic copy you can wire into any agent. Use `--global` on `kensa skills install` to install to your home dir instead of the project.
+
+Provider extras: `uv add "kensa[anthropic]"`, `uv add "kensa[openai]"`, `uv add "kensa[langchain]"`, `uv add "kensa[all]"`. MCP server extra: `uv add "kensa[mcp]"`.
 
 ## Docs
 
-- [GitHub](https://github.com/satyaborg/kensa): Source, README, and examples
-- [Architecture (AGENTS.md)](https://github.com/satyaborg/kensa/blob/main/AGENTS.md): Data flow, module dependency graph, design patterns, conventions
+- [GitHub](https://github.com/satyaborg/kensa): source, README, examples
+- [Architecture (AGENTS.md / CLAUDE.md)](https://github.com/satyaborg/kensa/blob/main/AGENTS.md): data flow, module dependency graph, design patterns, conventions
+- [Homepage](https://kensa.sh)
 
 ## How it works
 
 Your coding agent reasons: it reads your codebase, identifies failure modes from past traces, and writes scenarios. The CLI computes: it instruments, executes, judges, and reports. Skills orchestrate the workflow between them.
 
-Each scenario runs in its own subprocess. kensa auto-instruments the agent's LLM SDK and captures traces. Deterministic checks run first; if any check fails, the LLM judge is skipped (fail-fast). A scenario passes only when all checks pass AND the judge passes.
+Each scenario runs in its own subprocess with `KENSA_TRACE_DIR` set. Kensa injects a `sitecustomize.py` via `PYTHONPATH` that calls `instrument()` before the agent's code runs, configures OpenTelemetry, writes spans as JSONL, and auto-instruments any detected SDK (Anthropic, OpenAI, LangChain). No code changes in the agent. The injected directory is stripped from `PYTHONPATH` post-instrumentation so child subprocesses don't re-instrument.
 
-It gets smarter each run — feed traces from previous runs back in, and kensa generates scenarios targeting real failure modes instead of educated guesses.
+Deterministic checks run first; if any check fails, the LLM judge is skipped (fail-fast, save tokens). A scenario passes only when all checks pass AND the judge passes (or no `criteria` is set).
+
+It gets smarter each run. Feed traces from previous runs back through `kensa generate` and kensa synthesizes scenarios targeting real failure modes instead of educated guesses.
 
 ## Compatible coding agents
 
-Works with Claude Code, Cursor, Codex CLI, Gemini CLI, GitHub Copilot, Kiro, OpenCode, and Pi.
+The bundled skills install for: Claude Code, Codex, Cursor, OpenCode, and Gemini CLI. A generic `other` target works with any MCP-aware or skill-aware agent. The MCP server (see below) drives the same workflow from any MCP client, including Claude Desktop.
 
 ## Features
 
-- **Zero to eval**: The coding agent bootstraps your eval suite to solve cold-start. You review, not scaffold.
-- **Checks gate the judge**: Deterministic checks (tool ordering, cost caps, latency, output matching) run before the LLM judge. If a check fails, no tokens spent.
-- **Trace everything**: Auto-instruments Anthropic, OpenAI, and LangChain via OpenTelemetry. Each scenario runs in its own subprocess with isolated tracing and cache-aware cost tracking.
-- **Dataset-driven evals**: Point at a JSONL file. Each row becomes a run with its own trace and verdict. Re-run for variance stats, flaky detection, and anomaly flagging.
-- **Structured judges**: Define judge criteria in YAML with pass/fail definitions and few-shot examples. Reuse specs across scenarios for consistent grading.
+- **Zero to eval**: the coding agent bootstraps your eval suite to solve cold-start. You review, not scaffold.
+- **Capture-driven scenarios**: `kensa capture -- <cmd>` runs your agent once with full tracing. `kensa generate` synthesizes scenario YAMLs from the captured trace via an LLM.
+- **Checks gate the judge**: deterministic checks (output match, tool ordering, trajectory, cost caps, latency, turn count) run before the LLM judge. If a check fails, no tokens spent.
+- **Trace everything**: auto-instruments Anthropic, OpenAI, and LangChain via OpenTelemetry. Each scenario runs in its own subprocess with isolated tracing and cache-aware cost tracking.
+- **Dataset-driven evals**: point at a JSONL file. Each row becomes a run with its own trace and verdict. Re-run for variance stats, flaky detection, and anomaly flagging.
+- **Structured judges**: define judge criteria in YAML with pass/fail definitions and few-shot examples. Reuse specs across scenarios for consistent grading.
 - **No platform**: pip install, BYO API keys, all data stays local. Same CLI on your laptop and in CI.
 
 ## Skills
 
 Five skills orchestrate the eval workflow when used with a coding agent:
 
-- `/audit-evals`: Assess readiness, identify testable behaviors, prepare the environment. The default entry point.
-- `/generate-scenarios`: Happy paths, edge cases, tool usage, error handling, cost bounds. One command.
-- `/generate-judges`: Binary pass/fail definitions with few-shot examples, ready to reuse across scenarios.
-- `/validate-judge`: Test judge accuracy against human labels. Iterates until TPR and TNR meet threshold.
-- `/diagnose-errors`: Categorize failures, identify patterns, recommend next action.
+- `/audit-evals`: assess readiness, identify testable behaviors, prepare the environment. The default entry point. Triggered by "evaluate my agent", "set up evals", "is my agent ready?".
+- `/generate-scenarios`: happy paths, edge cases, tool usage, error handling, cost bounds. One command.
+- `/generate-judges`: binary pass/fail definitions with few-shot examples, ready to reuse across scenarios.
+- `/validate-judge`: test judge accuracy against human labels. Iterates until TPR and TNR meet threshold.
+- `/diagnose-errors`: categorize failures, identify patterns, recommend next action.
+
+The full lifecycle: `Setup → Design → Execute → Diagnose → Iterate`.
 
 ## Checks
 
-Deterministic check types — fast, cheap, binary. Run before the LLM judge to save cost:
+Deterministic check types. Fast, cheap, binary. Run before the LLM judge to save cost:
 
-- `output_contains`: Output includes a string or pattern
-- `output_matches`: Output matches a regex
-- `tools_called`: All listed tools were invoked (set membership, order-free)
-- `tools_not_called`: None of the listed tools were invoked
-- `tool_order`: Tools called in this temporal sequence (use only when order is load-bearing)
-- `trajectory`: Validate tool-call sequences against expected patterns (strict or any-order) with optional accuracy thresholds
-- `max_cost`: Total cost under threshold
+- `output_contains`: output includes a string or pattern
+- `output_matches`: output matches a regex
+- `tools_called`: all listed tools were invoked (set membership, order-free)
+- `tools_not_called`: none of the listed tools were invoked
+- `tool_order`: tools called in this temporal sequence (use only when order is load-bearing)
+- `trajectory`: validate tool-call sequences against expected patterns (strict or any-order) with optional accuracy thresholds, `max_steps`, and `max_tokens`
+- `max_cost`: total cost (USD) under threshold
 - `max_turns`: LLM call count under limit
-- `max_duration`: Execution time under limit
-- `no_repeat_calls`: No duplicate tool calls with identical arguments
+- `max_duration`: execution time under limit
+- `no_repeat_calls`: no duplicate tool calls with identical arguments
+
+Checks live in a registry (`CHECK_REGISTRY` in `checks.py`). Add a new check by registering a function. No call-site changes needed.
 
 ## Judge
 
@@ -66,13 +79,15 @@ Natural-language criteria assessed against the full execution trace. Binary pass
 
 Judge model resolution order:
 1. `KENSA_JUDGE_MODEL` env var (explicit override)
-2. `ANTHROPIC_API_KEY` present → claude-sonnet-4-6
-3. `OPENAI_API_KEY` present → gpt-5.4-mini
+2. `ANTHROPIC_API_KEY` present → `claude-sonnet-4-6`
+3. `OPENAI_API_KEY` present → `gpt-5.4-mini`
 4. Neither → error with setup instructions
+
+Judges are protocol-based (`JudgeProvider` in `judge.py`). `AnthropicJudge` and `OpenAIJudge` ship in-tree.
 
 ## Scenario format
 
-Scenarios are YAML files in `.kensa/scenarios/`. Example:
+Scenarios are YAML files in `.kensa/scenarios/`. The `input` is appended as the final argv element of `run_command` at execution time. Example:
 
 ```yaml
 id: classify_ticket
@@ -85,6 +100,12 @@ run_command: [python, agent.py]
 expected_outcome: Agent returns the correct priority label.
 
 checks:
+  - type: trajectory
+    params:
+      steps:
+        - tool: classify_ticket
+      max_steps: 1
+      max_tokens: 2000
   - type: output_matches
     params: { pattern: "^P[123]$" }
     description: Output must be exactly P1, P2, or P3.
@@ -101,20 +122,41 @@ criteria: |
 
 Works standalone without a coding agent. Python 3.10+.
 
-- `kensa eval`: run + judge + report in one shot
-- `kensa eval -s <name>`: eval specific scenario
-- `kensa init`: Set up .kensa/ dir with example agent
-- `kensa generate`: Synthesize scenario YAMLs from captured traces via an LLM
-- `kensa run`: Run scenarios and capture traces
-- `kensa judge`: Score the latest run with checks + LLM judge
-- `kensa judge --model <model>`: Override judge model
-- `kensa report`: Rich terminal output
+Setup and capture:
+- `kensa init`: bare scaffold of `.kensa/`, adds `kensa` to project dev deps, prompts for skill target
+- `kensa init --example`: scaffold with a demo agent and demo scenario
+- `kensa init --cli --agent all`: non-interactive, install all bundled skill targets
+- `kensa init --no-cli --agent none`: scaffold-only, no project mutations
+- `kensa skills install --agent <claude|codex|cursor|opencode|gemini|other|all>`: install bundled skills (also `--global`, `--force`)
+- `kensa capture -- <cmd> [args...]`: capture one real agent invocation as a trace
+- `kensa capture -i "<input>" -- <cmd> [args...]`: capture with an explicit input string (recommended)
+- `kensa doctor`: pre-flight environment checks (Python, SDKs, API keys, scenarios, judge)
+
+Run, judge, report:
+- `kensa run`: run all scenarios
+- `kensa run --scenario-id <name>`: run specific scenario
+- `kensa run --dry-run`: list scenarios that would run, without executing
+- `kensa judge`: run checks + LLM judge on the latest run
+- `kensa judge --run-id <id>`: judge a specific run
+- `kensa judge --model <model>`: override judge model
+- `kensa report`: rich terminal output for the latest run
 - `kensa report --format markdown`: CI-friendly markdown
-- `kensa report --format json`: Machine-readable
-- `kensa report --format html`: Standalone HTML file
-- `kensa analyze`: Surface cost, latency, and anomalies across runs
-- `kensa doctor`: Verify your setup is ready to run
-- `kensa mcp`: Serve kensa over MCP (stdio by default, `--http --port` for HTTP)
+- `kensa report --format json`: machine-readable
+- `kensa report --format html`: standalone HTML file
+- `kensa report --verbose`: show full check details and judge reasoning
+- `kensa eval`: run + judge + report in one shot (terminal, markdown, or json)
+- `kensa eval -s <name>`: eval a specific scenario
+
+Generate and analyze:
+- `kensa generate`: synthesize scenario YAMLs from the latest run's traces via an LLM
+- `kensa generate --run-id <id>`: synthesize from a specific run
+- `kensa generate --trace path/to/trace.jsonl -n 5`: synthesize N scenarios from a trace file
+- `kensa generate --dry-run`: print generated YAML without writing
+- `kensa analyze`: surface cost, latency, and anomalies across runs
+
+MCP:
+- `kensa mcp`: serve kensa over MCP (stdio by default)
+- `kensa mcp --http --host 127.0.0.1 --port 8765`: MCP over HTTP
 
 ## CI
 
@@ -128,29 +170,85 @@ Deterministic checks need no API keys. Add judge keys as secrets for LLM-judged 
 
 ## MCP server
 
-Kensa ships as an MCP server so any MCP-aware client (Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop) can drive the full eval workflow. `init`, `doctor`, `run`, `judge`, `eval`, `report`, and `analyze` are exposed as tools; runs, scenarios, and judges are readable as resources under `kensa://`.
+Kensa ships as an MCP server so any MCP-aware client (Claude Code, Cursor, Codex, OpenCode, Gemini CLI, Claude Desktop) can drive the full eval workflow.
 
-One-liner for Claude Code: `claude mcp add kensa -- uvx kensa-mcp`. The `kensa-mcp` PyPI shim pins to the matching `kensa[mcp]` version, so no pre-install is needed.
+Tools (7): `init`, `doctor`, `run`, `judge`, `eval`, `report`, `analyze`. Failures come back as a stable `MCPError(error, code, hint)` envelope rather than raising across the protocol boundary.
+
+Resources (8) under `kensa://`: `runs`, `runs/{run_id}`, `runs/{run_id}/results`, `runs/{run_id}/trace/{scenario}/{index}`, `scenarios`, `scenarios/{scenario_id}`, `judges`, `judges/{name}`.
+
+One-liner for Claude Code:
+
+```bash
+claude mcp add kensa -- uvx kensa-mcp
+```
+
+JSON config (`.mcp.json` or `.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "kensa": {
+      "command": "uvx",
+      "args": ["kensa-mcp"]
+    }
+  }
+}
+```
+
+Codex (`.codex/config.toml`):
+
+```toml
+[mcp_servers.kensa]
+command = "uvx"
+args = ["kensa-mcp"]
+```
+
+The `kensa-mcp` PyPI shim pins to the matching `kensa[mcp]` version, so no pre-install is needed. The shim's launcher prints a clean install hint instead of a two-level import traceback when `fastmcp` is missing.
 
 ## OTel compatibility
 
-Spans are standard OpenTelemetry. kensa writes them as JSONL locally, which is what `kensa run` and `kensa analyze` consume.
+Spans are standard OpenTelemetry. Kensa writes them as JSONL locally via a custom span exporter (`exporter.py`), which is what `kensa run` and `kensa analyze` consume. The only public Python export is `instrument()` (`from kensa import instrument`), an opt-in escape hatch for environments where `sitecustomize` cannot run (for example, `python -S`).
 
 ## Architecture
 
-Flat module structure in `src/kensa/`. Key modules: models.py (Pydantic domain objects, dependency root), checks.py (registry pattern), judge.py (protocol-based providers), runner.py (subprocess execution), report.py (formatters registry), exporter.py (OTel JSONL span exporter). No circular dependencies.
+Flat module structure in `src/kensa/`. No nested packages. No circular dependencies. `models.py` is the dependency root.
+
+Key modules:
+- `models.py`: Pydantic domain objects, dependency root
+- `paths.py`: centralized `.kensa/` path resolution (stdlib only)
+- `pricing.py`: model price lookup, OpenRouter fetch
+- `trace_semantics.py`: canonical tool-call dedup and ordering
+- `trajectory.py`: trajectory check helpers
+- `checks.py`: registry pattern (`CHECK_REGISTRY`)
+- `judge.py`: protocol-based providers (`JudgeProvider`, `AnthropicJudge`, `OpenAIJudge`)
+- `llm.py`: shared `Completer` protocol and Anthropic/OpenAI adapters
+- `runner.py`: subprocess execution, sitecustomize injection
+- `capture.py`: `kensa capture` (subprocess + trace + capture manifest)
+- `generate.py`: scenario synthesis from traces
+- `report.py`: formatters registry (terminal, markdown, json, html)
+- `analyzer.py`: cost / latency / anomaly stats
+- `aggregate.py`: multi-run variance and flaky detection
+- `exporter.py`: OTel JSONL span exporter (no kensa imports)
+- `scaffold.py`: idempotent `.kensa/` scaffolding (shared by CLI and MCP)
+- `skills_install.py`: bundled-skill installer + `uv add --dev` helper
+- `mcp_server.py`: MCP tools and resources (thin adapters)
+- `_mcp_launcher.py`: clean install-hint wrapper consumed by the `kensa-mcp` shim
+- `cli.py`: Click entry point, lazy imports for fast startup
 
 ## Examples
 
 Five example agents in `examples/`, each targeting a domain where reliability matters:
 
-- `sql-analyst`: Finance/BI — wrong revenue numbers, hallucinated metrics
-- `incident-triage`: SRE — missed P0, false 3am page
-- `code-reviewer`: Security — shipped CVE, false positive fatigue
-- `customer-support`: CX — misrouted ticket, unauthorized refund promise
-- `sdr-qualifier`: Sales — wasted AE time, lost hot lead
+- `sql-analyst`: Finance/BI - wrong revenue numbers, hallucinated metrics
+- `incident-triage`: SRE - missed P0, false 3am page
+- `code-reviewer`: Security - shipped CVE, false positive fatigue
+- `customer-support`: CX - misrouted ticket, unauthorized refund promise
+- `sdr-qualifier`: Sales - wasted AE time, lost hot lead
 
 ## Links
 
-- [GitHub](https://github.com/satyaborg/kensa): Source and documentation
-- [X](https://x.com/kensa_sh): Updates
+- [GitHub](https://github.com/satyaborg/kensa): source and documentation
+- [Homepage](https://kensa.sh)
+- [PyPI: kensa](https://pypi.org/project/kensa/)
+- [PyPI: kensa-mcp](https://pypi.org/project/kensa-mcp/)
+- [X](https://x.com/kensa_sh): updates
