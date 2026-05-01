@@ -10,6 +10,15 @@ keywords:
   - release notes
 ---
 
+## [0.7.0](https://github.com/satyaborg/kensa/releases/tag/v0.7.0) — 2026-05-01
+
+`kensa capture` records one real agent invocation, and `kensa generate` synthesizes scenarios straight from the capture, so you can bootstrap evals without writing any scenarios by hand.
+
+- New `kensa capture -- <cmd>` command runs your agent once with full instrumentation and writes a capture-kind run manifest plus a JSONL trace under `.kensa/`. Pass `-i/--input` to mirror `scenario.input`. `kensa run` rejects capture-kind manifests, so captures and evals stay separate.
+- `kensa generate` is now capture-aware: source priority is `--trace` → `--run-id` → latest capture manifest → latest run manifest. Generated scenarios inherit the observed `run_command` from the manifest verbatim.
+- `kensa init` now prompts for a coding agent (`-a/--agent claude|codex|cursor|opencode|gemini|other|all|none`) and installs the bundled skills into the right directory for that agent. Use `--no-cli` to skip the `uv add --dev kensa` step.
+- Internal: a new `RunKind` discriminator on the run manifest distinguishes `eval` runs from `capture` runs end to end, so the MCP server, report, and judge surfaces only operate on eval runs.
+
 ## [0.6.2](https://github.com/satyaborg/kensa/releases/tag/v0.6.2) — 2026-04-27
 
 `uvx kensa init` is now a one-shot bootstrap: scaffold scenarios, add kensa as a dev dep, and drop the Claude Code skills into the project.
