@@ -15,7 +15,7 @@ Run `uvx kensa init --cli --agent all`, then use the audit-evals skill and
 follow the eval lifecycle.
 ```
 
-The agent installs the CLI, scaffolds `.kensa/`, drops in the five skills, and runs your first eval.
+The agent installs the CLI, scaffolds `.kensa/`, drops in the five skills, and runs your first eval. Works with:
 
 <div style={{ display: 'flex', alignItems: 'center', gap: '0.9rem', marginTop: '0.75rem', flexWrap: 'wrap' }}>
   <Tooltip tip="Claude Code">
@@ -75,11 +75,31 @@ The agent installs the CLI, scaffolds `.kensa/`, drops in the five skills, and r
   </Tooltip>
 </div>
 
-## Or do it yourself
+## Or install yourself, then ask your agent
+
+If you want to control the install step but still let your coding agent drive the eval workflow:
 
 ```bash
-uvx kensa init   # adds kensa as a dev dep, scaffolds .kensa/, prompts for agent
-kensa eval       # run + judge + report
+uvx kensa init --cli --agent all
+```
+
+Then in Claude Code, Codex, Cursor, OpenCode, or Gemini CLI:
+
+```text
+> /audit-evals
+```
+
+The skill captures a real run, generates scenarios, runs evals, and reports back.
+
+## Or CLI-only
+
+If you want to skip the coding-agent loop entirely and drive kensa as a regular CLI:
+
+```bash
+uvx kensa init                                       # dev dep + bare .kensa/
+kensa capture -i "<example input>" -- <your agent>   # record one real run as a trace
+kensa generate                                       # synthesize scenarios from the capture
+kensa eval                                           # run + judge + report
 ```
 
 Add the SDK extra that matches your stack so traces include LLM calls and tool use:
