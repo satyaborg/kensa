@@ -105,7 +105,10 @@ kensa judge                   # judge latest run
 kensa report --format json    # machine-readable results
 kensa analyze --format json   # cost/latency stats + anomalies
 kensa doctor                  # pre-flight checks
-kensa init                    # scaffold .kensa/ with example scenario
+kensa init                    # scaffold .kensa/ (bare; no example) and prompt for skills install
+kensa init --example          # also scaffold a demo agent + scenario
+kensa capture -i "<input>" -- <cmd>   # record one real run as a trace
+kensa generate                # synthesize scenarios from latest capture
 ```
 
 ## Labels and validation data
@@ -119,7 +122,7 @@ Keep SKILL.md under 200 lines. If you need more, extract schemas into `reference
 ## The lifecycle
 
 ```
-audit-evals → generate-scenarios → generate-judges → validate-judge → kensa eval → diagnose-errors → (iterate)
+audit-evals → (kensa capture) → generate-scenarios → generate-judges → validate-judge → kensa eval → diagnose-errors → (iterate)
 ```
 
 Each skill owns one step. Skills don't overlap. If you're writing a skill that partially duplicates another, you're drawing the boundary wrong.
